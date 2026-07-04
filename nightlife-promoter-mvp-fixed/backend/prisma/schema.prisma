@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum IntegrationProvider {
+  FACEBOOK
+  INSTAGRAM
+  EVENTBRITE
+  POSH_VIP
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  PAUSED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String?
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String?
+  createdAt    DateTime      @default(now())
+}
+
+model Organization {
+  id           String        @id @default(cuid())
+  name         String
+  users        User[]
+  events       Event[]
+  contacts     Contact[]
+  campaigns    Campaign[]
+  integrations Integration[]
+  createdAt    DateTime      @default(now())
+}
+
+model Event {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  title          String
+  venue          String
+  address        String?
+  startsAt       DateTime
+  endsAt         DateTime?
+  capacity       Int?
+  ticketUrl      String?
+  flyerUrl       String?
+  expectedGuests Int          @default(0)
+  projectedBar   Float        @default(0)
+  createdAt      DateTime     @default(now())
+}
+
+model Contact {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  email          String?
+  phone          String?
+  firstName      String?
+  lastName       String?
+  tags           String[]
+  optedIn        Boolean      @default(true)
+  unsubscribedAt DateTime?
+  createdAt      DateTime     @default(now())
+}
+
+model Campaign {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  name           String
+  channel        String
+  message        String
+  status         CampaignStatus @default(DRAFT)
+  scheduledAt    DateTime?
+  createdAt      DateTime       @default(now())
+}
+
+model Integration {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  provider       IntegrationProvider
+  accessToken    String?
+  refreshToken   String?
+  accountName    String?
+  connectedAt    DateTime?
+  createdAt      DateTime            @default(now())
+}

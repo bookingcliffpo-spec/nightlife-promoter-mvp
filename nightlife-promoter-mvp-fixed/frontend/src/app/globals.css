@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { background: #07070a; color: white; }
+.card { @apply rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl; }
+.btn { @apply rounded-xl bg-fuchsia-500 px-4 py-2 font-bold text-white hover:bg-fuchsia-400; }
+.input { @apply w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-fuchsia-400; }

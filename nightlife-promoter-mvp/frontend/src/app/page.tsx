@@ -1,2 +1,0 @@
-import Link from 'next/link';
-export default function Home(){return <section className="mx-auto max-w-5xl py-20"><p className="text-fuchsia-300 font-bold">AI NIGHTLIFE OPERATING SYSTEM</p><h1 className="mt-4 text-6xl font-black leading-tight">Promote events, manage guests, sync ticketing, and track nightlife revenue in one platform.</h1><p className="mt-6 max-w-2xl text-xl text-white/70">Built for promoters, lounges, DJs, hospitality groups, and event brands.</p><Link href="/dashboard" className="btn mt-8 inline-block">Open Dashboard</Link></section>}

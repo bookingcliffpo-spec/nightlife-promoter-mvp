@@ -7,10 +7,31 @@ function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((path) => pathname === path || (path !== '/' && pathname.startsWith(`${path}/`)));
 }
 
+// Pages that never need to know whether a session exists — skip the Supabase
+// round-trip entirely so a misconfigured/unreachable Supabase project can't
+// take these down along with the authenticated app.
+const NEVER_NEEDS_SESSION = ['/', '/auth/callback', '/rsvp', '/unsubscribe'];
+
+function neverNeedsSession(pathname: string) {
+  return NEVER_NEEDS_SESSION.some((path) => pathname === path || (path !== '/' && pathname.startsWith(`${path}/`)));
+}
+
 export async function middleware(request: NextRequest) {
+  if (neverNeedsSession(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({ request: { headers: request.headers } });
 
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Supabase env vars are not configured — skipping auth check for', request.nextUrl.pathname);
+    return response;
+  }
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

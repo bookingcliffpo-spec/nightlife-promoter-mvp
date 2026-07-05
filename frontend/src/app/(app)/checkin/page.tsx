@@ -105,7 +105,7 @@ export default function CheckinPage() {
         <Card>
           <CardHeader>
             <CardTitle>Scanner</CardTitle>
-            <CardDescription>Point the camera at a guest's QR code, or type it manually.</CardDescription>
+            <CardDescription>Point the camera at a guest&apos;s QR code, or type it manually.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <QrScanner active={scanning && Boolean(eventId)} onScan={handleScan} />

@@ -10,6 +10,7 @@ jobs:
   backend:
     name: Backend build & typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -40,8 +41,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
+      - name: Update npm
+        run: npm install -g npm@latest
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
       - name: Generate Prisma client
         run: npx prisma generate
       - name: Validate Prisma schema
@@ -56,6 +59,7 @@ jobs:
   frontend:
     name: Frontend build & lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -70,8 +74,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
+      - name: Update npm
+        run: npm install -g npm@latest
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
       - name: Lint
         run: npm run lint
       - name: Build

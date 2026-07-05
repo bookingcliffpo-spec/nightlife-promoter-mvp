@@ -26,7 +26,8 @@ This app deploys as three pieces: **Supabase** (database + auth + storage), **Re
 2. In Render, choose **New → Blueprint** and point it at your repo — it will read `render.yaml`
    automatically and create the `nightlife-promoter-backend` web service.
    (Alternatively: **New → Web Service**, root directory `backend`, build command
-   `npm install && npm run build`, start command `npx prisma migrate deploy && npm run start`.)
+   `npm install && npx prisma generate && npm run build`, start command
+   `npx prisma migrate deploy && npm run start`.)
 3. Set the environment variables Render prompts for (marked `sync: false` in `render.yaml`):
    - `DATABASE_URL`, `DIRECT_URL` (from Supabase step 2)
    - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (from Supabase step 6)

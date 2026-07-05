@@ -58,12 +58,14 @@ rsvpRouter.post(
 
     let contactId: string | undefined;
     if (parsed.email || parsed.phone) {
+      const orConditions: Array<{ email: string } | { phone: string }> = [];
+      if (parsed.email) orConditions.push({ email: parsed.email });
+      if (parsed.phone) orConditions.push({ phone: parsed.phone });
+
       const existingContact = await prisma.contact.findFirst({
         where: {
           organizationId: event.organizationId,
-          OR: [parsed.email ? { email: parsed.email } : undefined, parsed.phone ? { phone: parsed.phone } : undefined].filter(
-            Boolean
-          ) as Record<string, string>[]
+          OR: orConditions
         }
       });
       const [firstName, ...rest] = parsed.name.split(' ');

@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 20% 99%;
+    --foreground: 240 10% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 8%;
+    --primary: 271 91% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 10% 8%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 292 91% 65%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 271 91% 65%;
+    --radius: 0.85rem;
+
+    --chart-1: #2a78d6;
+    --chart-2: #1baf7a;
+    --chart-grid: #e1e0d9;
+    --chart-muted: #898781;
+    --chart-good: #0ca30c;
+    --chart-critical: #d03b3b;
+  }
+
+  .dark {
+    --background: 240 25% 5%;
+    --foreground: 240 10% 96%;
+    --card: 240 22% 8%;
+    --card-foreground: 240 10% 96%;
+    --popover: 240 22% 8%;
+    --popover-foreground: 240 10% 96%;
+    --primary: 271 91% 68%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 15% 14%;
+    --secondary-foreground: 240 10% 96%;
+    --muted: 240 15% 14%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 292 91% 68%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 15% 18%;
+    --input: 240 15% 18%;
+    --ring: 271 91% 68%;
+
+    --chart-1: #3987e5;
+    --chart-2: #199e70;
+    --chart-grid: #2c2c2a;
+    --chart-muted: #898781;
+    --chart-good: #0ca30c;
+    --chart-critical: #e66767;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% -10%, hsl(271 91% 65% / 0.18), transparent),
+      radial-gradient(ellipse 80% 50% at 90% 0%, hsl(292 91% 65% / 0.14), transparent);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply border border-white/10 bg-white/60 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-white/5;
+  }
+  .glass-strong {
+    @apply border border-white/20 bg-white/80 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.08];
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-fuchsia-500 via-purple-500 to-indigo-500 bg-clip-text text-transparent;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-muted-foreground/30;
+}

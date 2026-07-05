@@ -1,0 +1,352 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+enum PlanTier {
+  FREE
+  PRO
+  ELITE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+enum VipLevel {
+  NONE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum GuestListType {
+  GENERAL
+  VIP
+  COMP
+  PROMOTER
+}
+
+enum RsvpStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
+enum CheckInMethod {
+  QR
+  MANUAL
+}
+
+enum CampaignChannel {
+  EMAIL
+  SMS
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  FAILED
+  OPENED
+  CLICKED
+  BOUNCED
+}
+
+enum AiGenerationType {
+  CAPTION
+  HASHTAGS
+  AD_COPY
+  DESCRIPTION
+}
+
+// ---------- Models ----------
+
+model Organization {
+  id                   String             @id @default(cuid())
+  name                 String
+  slug                 String             @unique
+  planTier             PlanTier           @default(FREE)
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  stripePriceId        String?
+  subscriptionStatus   SubscriptionStatus @default(TRIALING)
+  trialEndsAt          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  users        User[]
+  venues       Venue[]
+  events       Event[]
+  contacts     Contact[]
+  tags         Tag[]
+  campaigns    Campaign[]
+  aiGenerations AiGeneration[]
+  auditLogs    AuditLog[]
+}
+
+model User {
+  id             String       @id
+  email          String       @unique
+  name           String?
+  avatarUrl      String?
+  role           Role         @default(OWNER)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  auditLogs      AuditLog[]
+  aiGenerations  AiGeneration[]
+
+  @@index([organizationId])
+}
+
+model Venue {
+  id             String       @id @default(cuid())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  name           String
+  address        String?
+  city           String?
+  state          String?
+  country        String?
+  capacity       Int?
+  timezone       String       @default("America/New_York")
+  createdAt      DateTime     @default(now())
+
+  events Event[]
+
+  @@index([organizationId])
+}
+
+model Event {
+  id                   String       @id @default(cuid())
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId       String
+  venue                Venue?       @relation(fields: [venueId], references: [id])
+  venueId              String?
+  title                String
+  slug                 String       @unique
+  description          String?
+  status               EventStatus  @default(DRAFT)
+  startsAt             DateTime
+  endsAt               DateTime?
+  capacity             Int?
+  ticketUrl            String?
+  coverCharge          Float        @default(0)
+  expectedGuests       Int          @default(0)
+  projectedBarRevenue  Float        @default(0)
+  actualRevenue        Float        @default(0)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  flyers           Flyer[]
+  guestListEntries GuestListEntry[]
+  checkIns         CheckIn[]
+  campaigns        Campaign[]
+  aiGenerations    AiGeneration[]
+
+  @@index([organizationId])
+  @@index([startsAt])
+}
+
+model Flyer {
+  id          String   @id @default(cuid())
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId     String
+  url         String
+  storagePath String
+  width       Int?
+  height      Int?
+  aiGenerated Boolean  @default(false)
+  prompt      String?
+  createdAt   DateTime @default(now())
+
+  @@index([eventId])
+}
+
+model Tag {
+  id             String       @id @default(cuid())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  name           String
+  color          String       @default("#8b5cf6")
+  contacts       ContactTag[]
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, name])
+}
+
+model Contact {
+  id              String    @id @default(cuid())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId  String
+  firstName       String?
+  lastName        String?
+  email           String?
+  phone           String?
+  birthday        DateTime?
+  vipLevel        VipLevel  @default(NONE)
+  notes           String?
+  customFields    Json      @default("{}")
+  source          String?
+  optedInEmail    Boolean   @default(true)
+  optedInSms      Boolean   @default(true)
+  unsubscribedAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tags               ContactTag[]
+  guestListEntries   GuestListEntry[]
+  campaignRecipients CampaignRecipient[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([phone])
+}
+
+model ContactTag {
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactId String
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tagId     String
+
+  @@id([contactId, tagId])
+}
+
+model GuestListEntry {
+  id           String        @id @default(cuid())
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId      String
+  contact      Contact?      @relation(fields: [contactId], references: [id])
+  contactId    String?
+  name         String
+  email        String?
+  phone        String?
+  partySize    Int           @default(1)
+  listType     GuestListType @default(GENERAL)
+  rsvpStatus   RsvpStatus    @default(PENDING)
+  qrCode       String        @unique @default(cuid())
+  addedBy      String?
+  checkedInAt  DateTime?
+  createdAt    DateTime      @default(now())
+
+  checkIns CheckIn[]
+
+  @@index([eventId])
+}
+
+model CheckIn {
+  id               String         @id @default(cuid())
+  event            Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId          String
+  guestListEntry   GuestListEntry @relation(fields: [guestListEntryId], references: [id], onDelete: Cascade)
+  guestListEntryId String
+  method           CheckInMethod  @default(QR)
+  scannedBy        String?
+  scannedAt        DateTime       @default(now())
+
+  @@index([eventId])
+}
+
+model Campaign {
+  id             String          @id @default(cuid())
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  event          Event?          @relation(fields: [eventId], references: [id])
+  eventId        String?
+  name           String
+  channel        CampaignChannel
+  subject        String?
+  message        String
+  status         CampaignStatus  @default(DRAFT)
+  audienceTagIds String[]        @default([])
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  recipients CampaignRecipient[]
+
+  @@index([organizationId])
+}
+
+model CampaignRecipient {
+  id         String          @id @default(cuid())
+  campaign   Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  contact    Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactId  String
+  status     RecipientStatus @default(PENDING)
+  error      String?
+  sentAt     DateTime?
+  openedAt   DateTime?
+  clickedAt  DateTime?
+
+  @@unique([campaignId, contactId])
+  @@index([campaignId])
+}
+
+model AiGeneration {
+  id             String           @id @default(cuid())
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  user           User?            @relation(fields: [userId], references: [id])
+  userId         String?
+  event          Event?           @relation(fields: [eventId], references: [id])
+  eventId        String?
+  type           AiGenerationType
+  prompt         String
+  result         String
+  createdAt      DateTime         @default(now())
+
+  @@index([organizationId])
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  user           User?        @relation(fields: [userId], references: [id])
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json         @default("{}")
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([createdAt])
+}

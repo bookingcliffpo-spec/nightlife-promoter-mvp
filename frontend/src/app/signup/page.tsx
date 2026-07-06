@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { GoogleIcon } from '@/components/icons/GoogleIcon';
 import { toast } from 'sonner';
 
 export default function SignupPage() {
@@ -51,19 +50,6 @@ export default function SignupPage() {
     }
   }
 
-  async function handleGoogleSignup() {
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/callback` }
-      });
-      if (error) toast.error(error.message);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Unable to reach the authentication service. Please try again.');
-    }
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="w-full max-w-md">
@@ -82,12 +68,6 @@ export default function SignupPage() {
               </p>
             ) : (
               <>
-                <Button variant="outline" className="w-full" onClick={handleGoogleSignup}>
-                  <GoogleIcon className="h-4 w-4" /> Continue with Google
-                </Button>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <div className="h-px flex-1 bg-border" /> OR <div className="h-px flex-1 bg-border" />
-                </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="name">Full name</Label>

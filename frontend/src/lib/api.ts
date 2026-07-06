@@ -31,15 +31,27 @@ async function handleResponse(res: Response) {
   return body;
 }
 
+// Browsers throw a bare TypeError (e.g. "NetworkError when attempting to
+// fetch resource") when a request can't reach the server at all — wrong
+// host, DNS failure, CORS rejection, or the server being down. Surface a
+// message that actually points at the cause instead of that opaque error.
+async function safeFetch(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new ApiError(0, 'Could not connect to the server. Please check your connection and try again.');
+  }
+}
+
 export async function apiGet(path: string) {
   const authHeader = await getAuthHeader();
-  const res = await fetch(`${API_URL}${path}`, { headers: { ...authHeader }, cache: 'no-store' });
+  const res = await safeFetch(`${API_URL}${path}`, { headers: { ...authHeader }, cache: 'no-store' });
   return handleResponse(res);
 }
 
 export async function apiSend(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', data?: unknown) {
   const authHeader = await getAuthHeader();
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await safeFetch(`${API_URL}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', ...authHeader },
     body: data !== undefined ? JSON.stringify(data) : undefined,
@@ -50,25 +62,25 @@ export async function apiSend(path: string, method: 'POST' | 'PATCH' | 'PUT' | '
 
 export async function apiUpload(path: string, formData: FormData) {
   const authHeader = await getAuthHeader();
-  const res = await fetch(`${API_URL}${path}`, { method: 'POST', headers: { ...authHeader }, body: formData });
+  const res = await safeFetch(`${API_URL}${path}`, { method: 'POST', headers: { ...authHeader }, body: formData });
   return handleResponse(res);
 }
 
 export async function apiDownload(path: string): Promise<Blob> {
   const authHeader = await getAuthHeader();
-  const res = await fetch(`${API_URL}${path}`, { headers: { ...authHeader } });
+  const res = await safeFetch(`${API_URL}${path}`, { headers: { ...authHeader } });
   if (!res.ok) throw new ApiError(res.status, 'Download failed');
   return res.blob();
 }
 
 // Public (unauthenticated) endpoints — RSVP pages, unsubscribe pages.
 export async function publicApiGet(path: string) {
-  const res = await fetch(`${API_URL}${path}`, { cache: 'no-store' });
+  const res = await safeFetch(`${API_URL}${path}`, { cache: 'no-store' });
   return handleResponse(res);
 }
 
 export async function publicApiSend(path: string, method: 'POST' | 'PATCH', data?: unknown) {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await safeFetch(`${API_URL}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: data !== undefined ? JSON.stringify(data) : undefined

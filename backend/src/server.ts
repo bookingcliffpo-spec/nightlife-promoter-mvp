@@ -25,9 +25,30 @@ const port = Number(env.PORT);
 
 app.set('trust proxy', 1);
 app.use(helmet());
+
+// Vercel gives every deployment (production, git branch, and each preview
+// build) its own unique *.vercel.app subdomain, so a single hardcoded
+// FRONTEND_URL breaks the moment that subdomain changes. Accept the
+// configured FRONTEND_URL plus any *.vercel.app origin for this project.
+function isAllowedOrigin(origin: string) {
+  if (origin === env.FRONTEND_URL) return true;
+  try {
+    const { hostname, protocol } = new URL(origin);
+    return protocol === 'https:' && hostname.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
+}
+
 app.use(
   cors({
-    origin: env.FRONTEND_URL,
+    origin(origin, callback) {
+      if (!origin || isAllowedOrigin(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true
   })
 );

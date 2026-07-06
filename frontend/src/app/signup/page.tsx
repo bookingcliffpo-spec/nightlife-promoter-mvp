@@ -24,35 +24,44 @@ export default function SignupPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const supabase = createSupabaseBrowserClient();
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: name },
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name },
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+      if (error) {
+        toast.error(error.message);
+        return;
       }
-    });
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+      if (data.session) {
+        router.push('/dashboard');
+        router.refresh();
+        return;
+      }
+      setSent(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to reach the authentication service. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    if (data.session) {
-      router.push('/dashboard');
-      router.refresh();
-      return;
-    }
-    setSent(true);
   }
 
   async function handleGoogleSignup() {
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` }
-    });
-    if (error) toast.error(error.message);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback` }
+      });
+      if (error) toast.error(error.message);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to reach the authentication service. Please try again.');
+    }
   }
 
   return (

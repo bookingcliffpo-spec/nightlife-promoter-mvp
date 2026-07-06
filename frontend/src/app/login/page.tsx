@@ -32,26 +32,36 @@ function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      router.push(searchParams.get('redirectTo') || '/dashboard');
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to reach the authentication service. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    router.push(searchParams.get('redirectTo') || '/dashboard');
-    router.refresh();
   }
 
   async function handleGoogleLogin() {
     setGoogleLoading(true);
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` }
-    });
-    if (error) {
-      toast.error(error.message);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback` }
+      });
+      if (error) {
+        toast.error(error.message);
+        setGoogleLoading(false);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to reach the authentication service. Please try again.');
       setGoogleLoading(false);
     }
   }

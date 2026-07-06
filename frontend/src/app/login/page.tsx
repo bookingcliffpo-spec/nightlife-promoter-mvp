@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { GoogleIcon } from '@/components/icons/GoogleIcon';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
@@ -27,7 +26,6 @@ function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,24 +46,6 @@ function LoginForm() {
     }
   }
 
-  async function handleGoogleLogin() {
-    setGoogleLoading(true);
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/callback` }
-      });
-      if (error) {
-        toast.error(error.message);
-        setGoogleLoading(false);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Unable to reach the authentication service. Please try again.');
-      setGoogleLoading(false);
-    }
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="w-full max-w-md">
@@ -78,12 +58,6 @@ function LoginForm() {
             <CardDescription>Sign in to manage your events, guest lists, and campaigns.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button variant="outline" className="w-full" onClick={handleGoogleLogin} disabled={googleLoading}>
-              <GoogleIcon className="h-4 w-4" /> Continue with Google
-            </Button>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <div className="h-px flex-1 bg-border" /> OR <div className="h-px flex-1 bg-border" />
-            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>

@@ -10,6 +10,15 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+interface TeamMember {
+  id: string;
+  email: string;
+  name: string | null;
+  role: 'OWNER' | 'ADMIN' | 'STAFF';
+  createdAt: string;
+}
 
 interface Venue {
   id: string;
@@ -61,6 +70,135 @@ function OrganizationSettings() {
             {saving ? 'Saving…' : 'Save'}
           </Button>
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TeamSettings() {
+  const { me } = useMe();
+  const isOwner = me?.role === 'OWNER';
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [form, setForm] = useState({ email: '', role: 'STAFF' as 'ADMIN' | 'STAFF' });
+  const [inviting, setInviting] = useState(false);
+
+  function load() {
+    apiGet('/api/team').then(setMembers);
+  }
+
+  useEffect(load, []);
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    setInviting(true);
+    try {
+      await apiSend('/api/team/invite', 'POST', form);
+      setForm({ email: '', role: 'STAFF' });
+      load();
+      toast.success(`Invite sent to ${form.email}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not send invite');
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function handleRoleChange(userId: string, role: 'ADMIN' | 'STAFF') {
+    try {
+      await apiSend(`/api/team/${userId}/role`, 'PATCH', { role });
+      load();
+      toast.success('Role updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update role');
+    }
+  }
+
+  async function handleRemove(userId: string, email: string) {
+    if (!confirm(`Remove ${email} from your team? This immediately revokes their access.`)) return;
+    try {
+      await apiSend(`/api/team/${userId}`, 'DELETE');
+      load();
+      toast.success('Team member removed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not remove team member');
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Team</CardTitle>
+        <CardDescription>
+          {isOwner
+            ? 'Invite employees as moderators (Admin) or Staff. You are the owner with full access.'
+            : 'Everyone with access to your organization.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isOwner && (
+          <form onSubmit={handleInvite} className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <Input
+              type="email"
+              placeholder="employee@email.com"
+              required
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            />
+            <Select value={form.role} onValueChange={(role: 'ADMIN' | 'STAFF') => setForm((f) => ({ ...f, role }))}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ADMIN">Admin</SelectItem>
+                <SelectItem value="STAFF">Staff</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button type="submit" variant="gradient" disabled={inviting}>
+              {inviting ? 'Sending…' : 'Invite'}
+            </Button>
+          </form>
+        )}
+
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              {isOwner && <TableHead className="text-right">Actions</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {members.map((member) => (
+              <TableRow key={member.id}>
+                <TableCell className="font-medium">{member.name ? `${member.name} · ${member.email}` : member.email}</TableCell>
+                <TableCell>
+                  {isOwner && member.role !== 'OWNER' ? (
+                    <Select value={member.role} onValueChange={(role: 'ADMIN' | 'STAFF') => handleRoleChange(member.id, role)}>
+                      <SelectTrigger className="w-28">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ADMIN">Admin</SelectItem>
+                        <SelectItem value="STAFF">Staff</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge variant="secondary">{member.role}</Badge>
+                  )}
+                </TableCell>
+                {isOwner && (
+                  <TableCell className="text-right">
+                    {member.role !== 'OWNER' && (
+                      <Button size="icon" variant="ghost" onClick={() => handleRemove(member.id, member.email)} aria-label={`Remove ${member.email}`}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   );
@@ -236,6 +374,7 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground">Manage your organization, venues, and tags.</p>
       </div>
       <OrganizationSettings />
+      <TeamSettings />
       <VenueSettings />
       <TagSettings />
     </div>

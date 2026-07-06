@@ -6,6 +6,7 @@ import { env } from './env.js';
 import { apiRateLimiter } from './middleware/rateLimit.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { meRouter } from './routes/me.js';
+import { teamRouter } from './routes/team.js';
 import { eventsRouter, venuesRouter } from './routes/events.js';
 import { flyersRouter } from './routes/flyers.js';
 import { contactsRouter, tagsRouter } from './routes/contacts.js';
@@ -42,6 +43,7 @@ app.use(apiRateLimiter);
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'nightlife-promoter-backend' }));
 
 app.use('/api/me', meRouter);
+app.use('/api/team', teamRouter);
 app.use('/api/venues', venuesRouter);
 app.use('/api/events', eventsRouter);
 app.use('/api/flyers', flyersRouter);

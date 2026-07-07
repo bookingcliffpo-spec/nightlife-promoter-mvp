@@ -1,6 +1,10 @@
 import { createSupabaseBrowserClient } from './supabase/client';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+// Falls back to the live Render backend in production so the app works
+// even if NEXT_PUBLIC_API_URL isn't set in the deployment platform's
+// dashboard; local development still defaults to the local backend.
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'production' ? 'https://nightlife-promoter-mvp-1.onrender.com' : 'http://localhost:4000');
 
 export class ApiError extends Error {
   status: number;

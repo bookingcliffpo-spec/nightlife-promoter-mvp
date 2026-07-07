@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { Role } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from './errorHandler.js';
@@ -46,28 +47,40 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     let user = await prisma.user.findUnique({ where: { id: supabaseUser.id } });
 
     if (!user) {
-      const name = (supabaseUser.user_metadata?.full_name as string) || (supabaseUser.user_metadata?.name as string) || null;
-      const orgName = name ? `${name}'s Organization` : `${supabaseUser.email?.split('@')[0] ?? 'New'} Organization`;
-      const slug = await uniqueSlug(orgName);
+      try {
+        const name = (supabaseUser.user_metadata?.full_name as string) || (supabaseUser.user_metadata?.name as string) || null;
+        const orgName = name ? `${name}'s Organization` : `${supabaseUser.email?.split('@')[0] ?? 'New'} Organization`;
+        const slug = await uniqueSlug(orgName);
 
-      const organization = await prisma.organization.create({
-        data: {
-          name: orgName,
-          slug,
-          trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
-        }
-      });
+        const organization = await prisma.organization.create({
+          data: {
+            name: orgName,
+            slug,
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+          }
+        });
 
-      user = await prisma.user.create({
-        data: {
-          id: supabaseUser.id,
-          email: supabaseUser.email ?? '',
-          name,
-          avatarUrl: (supabaseUser.user_metadata?.avatar_url as string) ?? null,
-          role: 'OWNER',
-          organizationId: organization.id
+        user = await prisma.user.create({
+          data: {
+            id: supabaseUser.id,
+            email: supabaseUser.email ?? '',
+            name,
+            avatarUrl: (supabaseUser.user_metadata?.avatar_url as string) ?? null,
+            role: 'OWNER',
+            organizationId: organization.id
+          }
+        });
+      } catch (err) {
+        // A brand new account's first page load fires several authenticated
+        // requests in parallel (e.g. /api/me and /api/contacts at once), so
+        // more than one can reach here simultaneously and race to create the
+        // same user row. The loser hits a unique constraint violation — that
+        // just means the winner already created it, so fetch it instead.
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          user = await prisma.user.findUnique({ where: { id: supabaseUser.id } });
         }
-      });
+        if (!user) throw err;
+      }
     }
 
     req.auth = {

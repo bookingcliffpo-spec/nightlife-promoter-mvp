@@ -13,6 +13,7 @@ type SignupLogPayload = {
   hasSession?: unknown;
   hasUser?: unknown;
   identitiesCount?: unknown;
+  redirectUrl?: unknown;
   timestamp?: unknown;
 };
 
@@ -42,6 +43,7 @@ function sanitizeSignupLog(body: SignupLogPayload) {
     hasSession: booleanOrNull(body.hasSession),
     hasUser: booleanOrNull(body.hasUser),
     identitiesCount: numberOrNull(body.identitiesCount),
+    redirectUrl: stringOrNull(body.redirectUrl),
     timestamp: stringOrNull(body.timestamp) ?? new Date().toISOString()
   };
 }

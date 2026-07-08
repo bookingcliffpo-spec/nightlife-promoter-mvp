@@ -251,7 +251,7 @@ function isPhoneLike(value: string) {
   return /^[+()\d\s.-]*(?:\s*(?:x|ext\.?|extension)\s*\d+)?$/i.test(cleaned);
 }
 
-function splitName(value?: string) {
+function splitName(value?: string): { firstName?: string; lastName?: string } {
   const cleaned = value?.replace(/\s+/g, ' ').trim();
   if (!cleaned) return {};
 

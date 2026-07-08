@@ -1,16 +1,16 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/', '/login', '/signup', '/auth/callback', '/rsvp', '/unsubscribe'];
+const PUBLIC_PATHS = ['/', '/login', '/signup', '/auth/callback', '/api/auth/signup-log', '/rsvp', '/unsubscribe'];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((path) => pathname === path || (path !== '/' && pathname.startsWith(`${path}/`)));
 }
 
-// Pages that never need to know whether a session exists — skip the Supabase
-// round-trip entirely so a misconfigured/unreachable Supabase project can't
-// take these down along with the authenticated app.
-const NEVER_NEEDS_SESSION = ['/', '/auth/callback', '/rsvp', '/unsubscribe'];
+// Pages and public endpoints that never need to know whether a session exists —
+// skip the Supabase round-trip entirely so a misconfigured/unreachable Supabase
+// project can't take these down along with the authenticated app.
+const NEVER_NEEDS_SESSION = ['/', '/auth/callback', '/api/auth/signup-log', '/rsvp', '/unsubscribe'];
 
 function neverNeedsSession(pathname: string) {
   return NEVER_NEEDS_SESSION.some((path) => pathname === path || (path !== '/' && pathname.startsWith(`${path}/`)));

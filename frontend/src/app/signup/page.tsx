@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 
 const RATE_LIMIT_MESSAGE = 'Too many signup attempts. Please wait a few minutes before requesting another verification email.';
 const GENERIC_AUTH_MESSAGE = 'Unable to reach the authentication service. Please try again.';
+const PRODUCTION_SITE_URL = 'https://nightlife-promoter-mvp.vercel.app';
 
 type AuthErrorDetails = {
   code: string | null;
@@ -42,11 +43,44 @@ type SignupLogEvent = {
   hasSession?: boolean;
   hasUser?: boolean;
   identitiesCount?: number | null;
+  redirectUrl?: string;
   timestamp?: string;
 };
 
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/$/, '');
+}
+
+function withProtocol(value: string) {
+  return value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`;
+}
+
+function getAuthBaseUrl() {
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
+  if (configuredSiteUrl) {
+    return trimTrailingSlash(withProtocol(configuredSiteUrl));
+  }
+
+  if (typeof window !== 'undefined') {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (!isLocalhost) {
+      return trimTrailingSlash(window.location.origin);
+    }
+  }
+
+  const vercelUrl = process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL || process.env.NEXT_PUBLIC_VERCEL_URL;
+
+  if (vercelUrl) {
+    return trimTrailingSlash(withProtocol(vercelUrl));
+  }
+
+  return PRODUCTION_SITE_URL;
+}
+
 function getAuthRedirectUrl() {
-  return `${window.location.origin}/auth/callback`;
+  return `${getAuthBaseUrl()}/auth/callback`;
 }
 
 function normalizeEmail(value: string) {
@@ -125,13 +159,15 @@ export default function SignupPage() {
 
     const normalizedEmail = normalizeEmail(email);
     const emailDomain = getEmailDomain(normalizedEmail);
+    const redirectUrl = getAuthRedirectUrl();
 
     if (signupInFlightRef.current) {
       logSignupEvent({
         event: 'signup_duplicate_blocked',
         requestId: `signup-blocked-${Date.now()}`,
         attemptNumber: signupAttemptCountRef.current,
-        emailDomain
+        emailDomain,
+        redirectUrl
       });
       return;
     }
@@ -144,7 +180,7 @@ export default function SignupPage() {
     const requestId = `signup-${Date.now()}-${attemptNumber}`;
     const startedAt = performance.now();
 
-    logSignupEvent({ event: 'signup_started', requestId, attemptNumber, emailDomain });
+    logSignupEvent({ event: 'signup_started', requestId, attemptNumber, emailDomain, redirectUrl });
 
     try {
       const supabase = createSupabaseBrowserClient();
@@ -153,7 +189,7 @@ export default function SignupPage() {
         password,
         options: {
           data: { full_name: name.trim() },
-          emailRedirectTo: getAuthRedirectUrl()
+          emailRedirectTo: redirectUrl
         }
       });
 
@@ -175,7 +211,8 @@ export default function SignupPage() {
           errorStatus: details.status,
           hasSession: Boolean(data.session),
           hasUser: Boolean(data.user),
-          identitiesCount
+          identitiesCount,
+          redirectUrl
         });
 
         if (isRateLimitError(details)) {
@@ -202,7 +239,8 @@ export default function SignupPage() {
         elapsedMs,
         hasSession: Boolean(data.session),
         hasUser: Boolean(data.user),
-        identitiesCount
+        identitiesCount,
+        redirectUrl
       });
 
       if (data.session) {
@@ -232,7 +270,8 @@ export default function SignupPage() {
         errorCode: details.code,
         errorMessage: details.message,
         errorName: details.name,
-        errorStatus: details.status
+        errorStatus: details.status,
+        redirectUrl
       });
 
       toast.error(isRateLimitError(details) ? RATE_LIMIT_MESSAGE : details.message);
@@ -245,6 +284,7 @@ export default function SignupPage() {
   async function handleResendVerification() {
     const normalizedEmail = confirmationEmail ?? normalizeEmail(email);
     const emailDomain = getEmailDomain(normalizedEmail);
+    const redirectUrl = getAuthRedirectUrl();
 
     if (!normalizedEmail) {
       toast.error('Enter your email address first.');
@@ -256,7 +296,8 @@ export default function SignupPage() {
         event: 'signup_resend_duplicate_blocked',
         requestId: `signup-resend-blocked-${Date.now()}`,
         attemptNumber: resendAttemptCountRef.current,
-        emailDomain
+        emailDomain,
+        redirectUrl
       });
       return;
     }
@@ -269,7 +310,7 @@ export default function SignupPage() {
     const requestId = `signup-resend-${Date.now()}-${attemptNumber}`;
     const startedAt = performance.now();
 
-    logSignupEvent({ event: 'signup_resend_started', requestId, attemptNumber, emailDomain });
+    logSignupEvent({ event: 'signup_resend_started', requestId, attemptNumber, emailDomain, redirectUrl });
 
     try {
       const supabase = createSupabaseBrowserClient();
@@ -277,7 +318,7 @@ export default function SignupPage() {
         type: 'signup',
         email: normalizedEmail,
         options: {
-          emailRedirectTo: getAuthRedirectUrl()
+          emailRedirectTo: redirectUrl
         }
       });
 
@@ -295,14 +336,15 @@ export default function SignupPage() {
           errorCode: details.code,
           errorMessage: details.message,
           errorName: details.name,
-          errorStatus: details.status
+          errorStatus: details.status,
+          redirectUrl
         });
 
         toast.error(isRateLimitError(details) ? RATE_LIMIT_MESSAGE : details.message);
         return;
       }
 
-      logSignupEvent({ event: 'signup_resend_succeeded', requestId, attemptNumber, emailDomain, elapsedMs });
+      logSignupEvent({ event: 'signup_resend_succeeded', requestId, attemptNumber, emailDomain, elapsedMs, redirectUrl });
       toast.success('Verification email resent.');
       setConfirmationMessage('We sent another verification email. Check your inbox to finish creating your account.');
     } catch (err) {
@@ -318,7 +360,8 @@ export default function SignupPage() {
         errorCode: details.code,
         errorMessage: details.message,
         errorName: details.name,
-        errorStatus: details.status
+        errorStatus: details.status,
+        redirectUrl
       });
 
       toast.error(isRateLimitError(details) ? RATE_LIMIT_MESSAGE : details.message);

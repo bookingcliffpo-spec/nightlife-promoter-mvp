@@ -47,7 +47,7 @@ export default function Home() {
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="max-w-3xl">
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-200">Social feed plus ticketed events</p>
             <h1 className="mt-4 text-5xl font-black leading-none tracking-tight sm:text-7xl">Nightlife Promoter AI</h1>
-            <p className="mt-6 max-w-2xl text-lg text-white/82 sm:text-xl">
+            <p className="mt-6 max-w-2xl text-lg text-white/80 sm:text-xl">
               An all-in-one platform for promoters and venues that combines event discovery, social-style promotion, guest CRM, campaigns, AI content, and door check-in.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -56,7 +56,7 @@ export default function Home() {
                   Build your event hub <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button size="lg" variant="outline" asChild className="border-white/35 bg-white/10 text-white hover:bg-white/20 hover:text-white">
+              <Button size="lg" variant="outline" asChild className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white">
                 <Link href="/login">Open dashboard</Link>
               </Button>
             </div>
@@ -78,7 +78,7 @@ export default function Home() {
             </div>
             <div className="grid min-h-[360px] bg-cover bg-center md:grid-cols-[1fr_260px]" style={{ backgroundImage: `linear-gradient(90deg, rgba(0,0,0,.1), rgba(0,0,0,.58)), url(${eventImages[0]})` }}>
               <div />
-              <div className="flex flex-col justify-end bg-black/35 p-5 text-white backdrop-blur-[1px]">
+              <div className="flex flex-col justify-end bg-black/40 p-5 text-white backdrop-blur-[1px]">
                 <p className="text-sm font-bold text-orange-200">Jun 19, 10:00 PM</p>
                 <h2 className="mt-2 text-2xl font-black">Event content that sells the room.</h2>
                 <div className="mt-4 flex gap-4 text-sm text-white/80">

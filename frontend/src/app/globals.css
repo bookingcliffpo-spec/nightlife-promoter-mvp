@@ -4,86 +4,93 @@
 
 @layer base {
   :root {
-    --background: 240 20% 99%;
-    --foreground: 240 10% 8%;
+    --background: 220 20% 97%;
+    --foreground: 222 24% 8%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 8%;
+    --card-foreground: 222 24% 8%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 8%;
-    --primary: 271 91% 65%;
+    --popover-foreground: 222 24% 8%;
+    --primary: 16 92% 52%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 10% 8%;
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
-    --accent: 292 91% 65%;
+    --secondary: 220 18% 94%;
+    --secondary-foreground: 222 18% 14%;
+    --muted: 220 16% 94%;
+    --muted-foreground: 220 8% 42%;
+    --accent: 332 84% 56%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 84% 58%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 271 91% 65%;
-    --radius: 0.85rem;
+    --border: 220 14% 88%;
+    --input: 220 14% 88%;
+    --ring: 16 92% 52%;
+    --radius: 0.5rem;
 
-    --chart-1: #2a78d6;
-    --chart-2: #1baf7a;
-    --chart-grid: #e1e0d9;
-    --chart-muted: #898781;
-    --chart-good: #0ca30c;
-    --chart-critical: #d03b3b;
+    --chart-1: #f05523;
+    --chart-2: #0ea5a4;
+    --chart-grid: #e6e8ec;
+    --chart-muted: #7b808b;
+    --chart-good: #0f9f6e;
+    --chart-critical: #d93f3f;
   }
 
   .dark {
-    --background: 240 25% 5%;
-    --foreground: 240 10% 96%;
-    --card: 240 22% 8%;
-    --card-foreground: 240 10% 96%;
-    --popover: 240 22% 8%;
-    --popover-foreground: 240 10% 96%;
-    --primary: 271 91% 68%;
+    --background: 222 24% 7%;
+    --foreground: 220 24% 96%;
+    --card: 222 22% 10%;
+    --card-foreground: 220 24% 96%;
+    --popover: 222 22% 10%;
+    --popover-foreground: 220 24% 96%;
+    --primary: 16 92% 58%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 15% 14%;
-    --secondary-foreground: 240 10% 96%;
-    --muted: 240 15% 14%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 292 91% 68%;
+    --secondary: 222 18% 15%;
+    --secondary-foreground: 220 24% 96%;
+    --muted: 222 18% 15%;
+    --muted-foreground: 220 9% 66%;
+    --accent: 332 84% 62%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 15% 18%;
-    --input: 240 15% 18%;
-    --ring: 271 91% 68%;
+    --border: 222 16% 18%;
+    --input: 222 16% 18%;
+    --ring: 16 92% 58%;
 
-    --chart-1: #3987e5;
-    --chart-2: #199e70;
-    --chart-grid: #2c2c2a;
-    --chart-muted: #898781;
-    --chart-good: #0ca30c;
-    --chart-critical: #e66767;
+    --chart-1: #ff6a35;
+    --chart-2: #15b8b4;
+    --chart-grid: #2c3038;
+    --chart-muted: #8b9099;
+    --chart-good: #16b87f;
+    --chart-critical: #ef6262;
   }
 
   * {
     @apply border-border;
   }
 
+  html {
+    text-rendering: optimizeLegibility;
+  }
+
   body {
     @apply bg-background text-foreground;
-    background-image:
-      radial-gradient(ellipse 80% 50% at 20% -10%, hsl(271 91% 65% / 0.18), transparent),
-      radial-gradient(ellipse 80% 50% at 90% 0%, hsl(292 91% 65% / 0.14), transparent);
+    background-image: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(220 18% 99%) 42%, hsl(var(--background)) 100%);
     background-attachment: fixed;
   }
 }
 
 @layer components {
   .glass {
-    @apply border border-white/10 bg-white/60 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-white/5;
+    @apply border border-border/80 bg-card/90 shadow-sm backdrop-blur-xl dark:bg-card/85;
   }
   .glass-strong {
-    @apply border border-white/20 bg-white/80 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.08];
+    @apply border border-border bg-card shadow-lg shadow-black/5 backdrop-blur-xl dark:shadow-black/30;
   }
   .gradient-text {
-    @apply bg-gradient-to-r from-fuchsia-500 via-purple-500 to-indigo-500 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-orange-600 via-pink-600 to-fuchsia-600 bg-clip-text text-transparent;
+  }
+  .event-image-fallback {
+    background:
+      linear-gradient(135deg, hsl(16 92% 52% / 0.92), hsl(332 84% 56% / 0.88)),
+      linear-gradient(45deg, hsl(222 24% 8%), hsl(222 24% 18%));
   }
 }
 

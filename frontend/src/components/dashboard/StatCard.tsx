@@ -15,20 +15,20 @@ export function StatCard({
 }) {
   return (
     <Card>
-      <CardContent className="flex items-center gap-4 p-5">
+      <CardContent className="flex items-center justify-between gap-4 p-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="mt-2 text-2xl font-black tabular-nums tracking-tight">{value}</p>
+        </div>
         <div
           className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white',
-            accent === 'primary' && 'bg-gradient-to-br from-fuchsia-500 to-purple-600',
-            accent === 'accent' && 'bg-gradient-to-br from-indigo-500 to-blue-600',
-            accent === 'good' && 'bg-gradient-to-br from-emerald-500 to-teal-600'
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border',
+            accent === 'primary' && 'border-orange-500/20 bg-orange-500/10 text-orange-600 dark:text-orange-400',
+            accent === 'accent' && 'border-pink-500/20 bg-pink-500/10 text-pink-600 dark:text-pink-400',
+            accent === 'good' && 'border-teal-500/20 bg-teal-500/10 text-teal-700 dark:text-teal-300'
           )}
         >
           <Icon className="h-5 w-5" />
-        </div>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-          <p className="text-2xl font-bold tabular-nums">{value}</p>
         </div>
       </CardContent>
     </Card>

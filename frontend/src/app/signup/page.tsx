@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 const RATE_LIMIT_MESSAGE = 'Too many signup attempts. Please wait a few minutes before requesting another verification email.';
 const GENERIC_AUTH_MESSAGE = 'Unable to reach the authentication service. Please try again.';
 const PRODUCTION_SITE_URL = 'https://nightlife-promoter-mvp.vercel.app';
+const LOCAL_AUTH_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
 type AuthErrorDetails = {
   code: string | null;
@@ -55,25 +56,48 @@ function withProtocol(value: string) {
   return value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`;
 }
 
+function getValidPublicAuthBaseUrl(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(withProtocol(value.trim()));
+
+    if (LOCAL_AUTH_HOSTNAMES.has(url.hostname)) {
+      return null;
+    }
+
+    return trimTrailingSlash(url.origin);
+  } catch {
+    return null;
+  }
+}
+
 function getAuthBaseUrl() {
-  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const browserOrigin =
+    typeof window !== 'undefined' ? getValidPublicAuthBaseUrl(window.location.origin) : null;
+
+  if (browserOrigin) {
+    return browserOrigin;
+  }
+
+  const configuredSiteUrl = getValidPublicAuthBaseUrl(process.env.NEXT_PUBLIC_SITE_URL);
 
   if (configuredSiteUrl) {
-    return trimTrailingSlash(withProtocol(configuredSiteUrl));
+    return configuredSiteUrl;
   }
 
-  if (typeof window !== 'undefined') {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const vercelProductionUrl = getValidPublicAuthBaseUrl(process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL);
 
-    if (!isLocalhost) {
-      return trimTrailingSlash(window.location.origin);
-    }
+  if (vercelProductionUrl) {
+    return vercelProductionUrl;
   }
 
-  const vercelUrl = process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL || process.env.NEXT_PUBLIC_VERCEL_URL;
+  const vercelUrl = getValidPublicAuthBaseUrl(process.env.NEXT_PUBLIC_VERCEL_URL);
 
   if (vercelUrl) {
-    return trimTrailingSlash(withProtocol(vercelUrl));
+    return vercelUrl;
   }
 
   return PRODUCTION_SITE_URL;

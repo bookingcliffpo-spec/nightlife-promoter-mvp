@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 const RATE_LIMIT_MESSAGE = 'Too many signup attempts. Please wait a few minutes before requesting another verification email.';
 const GENERIC_AUTH_MESSAGE = 'Unable to reach the authentication service. Please try again.';
 const PRODUCTION_SITE_URL = 'https://nightlife-promoter-mvp.vercel.app';
-const LOCAL_AUTH_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
+const PRODUCTION_AUTH_CALLBACK_URL = `${PRODUCTION_SITE_URL}/auth/callback`;
 
 type AuthErrorDetails = {
   code: string | null;
@@ -48,63 +48,8 @@ type SignupLogEvent = {
   timestamp?: string;
 };
 
-function trimTrailingSlash(value: string) {
-  return value.replace(/\/$/, '');
-}
-
-function withProtocol(value: string) {
-  return value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`;
-}
-
-function getValidPublicAuthBaseUrl(value?: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const url = new URL(withProtocol(value.trim()));
-
-    if (LOCAL_AUTH_HOSTNAMES.has(url.hostname)) {
-      return null;
-    }
-
-    return trimTrailingSlash(url.origin);
-  } catch {
-    return null;
-  }
-}
-
-function getAuthBaseUrl() {
-  const browserOrigin =
-    typeof window !== 'undefined' ? getValidPublicAuthBaseUrl(window.location.origin) : null;
-
-  if (browserOrigin) {
-    return browserOrigin;
-  }
-
-  const configuredSiteUrl = getValidPublicAuthBaseUrl(process.env.NEXT_PUBLIC_SITE_URL);
-
-  if (configuredSiteUrl) {
-    return configuredSiteUrl;
-  }
-
-  const vercelProductionUrl = getValidPublicAuthBaseUrl(process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL);
-
-  if (vercelProductionUrl) {
-    return vercelProductionUrl;
-  }
-
-  const vercelUrl = getValidPublicAuthBaseUrl(process.env.NEXT_PUBLIC_VERCEL_URL);
-
-  if (vercelUrl) {
-    return vercelUrl;
-  }
-
-  return PRODUCTION_SITE_URL;
-}
-
 function getAuthRedirectUrl() {
-  return `${getAuthBaseUrl()}/auth/callback`;
+  return PRODUCTION_AUTH_CALLBACK_URL;
 }
 
 function normalizeEmail(value: string) {

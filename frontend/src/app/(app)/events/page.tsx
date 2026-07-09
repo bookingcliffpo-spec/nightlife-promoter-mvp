@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, MapPin, Search, Ticket, Users } from 'lucide-react';
+import { CalendarDays, MapPin, Search, Ticket } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { EventFormDialog } from '@/components/events/EventFormDialog';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,7 +10,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/utils';
-import { cn } from '@/lib/utils';
 
 interface EventListItem {
   id: string;

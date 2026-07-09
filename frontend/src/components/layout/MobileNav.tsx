@@ -2,29 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  LayoutDashboard,
-  CalendarDays,
-  Users,
-  Megaphone,
-  Sparkles,
-  QrCode,
-  BarChart3,
-  CreditCard,
-  Settings
-} from 'lucide-react';
+import { BarChart3, CalendarDays, CreditCard, Home, Megaphone, QrCode, Settings, Sparkles, Users } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 const links = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/events', label: 'Events & Flyers', icon: CalendarDays },
-  { href: '/contacts', label: 'Contacts / CRM', icon: Users },
+  { href: '/dashboard', label: 'Home', icon: Home },
+  { href: '/events', label: 'Events', icon: CalendarDays },
+  { href: '/contacts', label: 'Audience', icon: Users },
   { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
-  { href: '/ai', label: 'AI Studio', icon: Sparkles },
-  { href: '/checkin', label: 'Door / Check-in', icon: QrCode },
-  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { href: '/billing', label: 'Billing', icon: CreditCard },
+  { href: '/ai', label: 'Create', icon: Sparkles },
+  { href: '/checkin', label: 'Door', icon: QrCode },
+  { href: '/analytics', label: 'Insights', icon: BarChart3 },
+  { href: '/billing', label: 'Tickets', icon: CreditCard },
   { href: '/settings', label: 'Settings', icon: Settings }
 ];
 
@@ -44,11 +34,11 @@ export function MobileNav({ open, onOpenChange }: { open: boolean; onOpenChange:
                 href={href}
                 onClick={() => onOpenChange(false)}
                 className={cn(
-                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent/10 hover:text-foreground',
-                  active && 'bg-primary/10 text-primary'
+                  'flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground',
+                  active && 'bg-foreground text-background hover:bg-foreground hover:text-background'
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-5 w-5" />
                 {label}
               </Link>
             );

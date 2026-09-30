@@ -116,7 +116,7 @@ class CliffFreeStudioPlugin(WAN2GPPlugin):
                 return "Cancellation requested."
             return "No active generation."
 
-        with gr.Column():
+        with gr.Column() as root:
             gr.Markdown(
                 """
 # Cliff Free Cinematic Studio
@@ -195,4 +195,4 @@ Use the cinematic prompt builder for direct LTX-2.5 generation, or launch one of
 """
             )
 
-        return gr.Column()
+        return root

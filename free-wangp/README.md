@@ -69,3 +69,44 @@ git submodule update --remote WanGP
 ```
 
 Review upstream release notes and license changes before committing a new submodule revision.
+
+
+## Cliff Free Cinematic Studio plugin
+
+The launchers automatically copy and enable `free-wangp/wan2gp-cliff-studio` inside WanGP.
+
+After WanGP starts, open the **Cliff Studio** tab. It includes:
+
+- cinematic prompt-to-video generation through local LTX-2.5 Distilled
+- genre, era, camera, lens, camera-move, lighting, tempo, aspect-ratio, duration, and sound controls
+- compiled cinematic prompts
+- direct local generation with progress and cancellation
+- workflow launch buttons for:
+  - Text to Video
+  - Image to Video / Start + End
+  - Reference to Video
+  - Multi-Subject Reference
+  - Motion Transfer / Control
+  - Video Edit
+  - Character Swap
+  - Object / Product Swap
+  - Wardrobe Swap
+  - Location Swap
+  - Regional Edit / Inpaint
+  - Style Transfer
+  - Video Extend
+
+The workflow buttons open the corresponding native WanGP model family so the generation itself remains handled by WanGP rather than a paid cloud API.
+
+### Model mapping
+
+| Creative workflow | Local WanGP model |
+| --- | --- |
+| Cinematic text-to-video / extend | `ltx2_25_22B_distilled` |
+| Image-to-video / first-last frame | `minimax_h3_fl2va_pruned` |
+| Multimodal references | `minimax_h3_ref2va_pruned` |
+| Multi-subject reference | `ltx2_25_22B_msr` |
+| Motion / pose / depth / edge / masked control | `minimax_h3_control_pruned` |
+| Reference video edit / character-object-wardrobe-location swaps | `ltx2_22B_distilled_1_1_edit_anything` |
+
+The public website also includes a cinematic prompt builder and can export a WanGP settings JSON file for the selected workflow.

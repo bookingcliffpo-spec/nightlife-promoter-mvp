@@ -1,2 +1,5 @@
-import { Studio } from "@/components/cliff-video-studio";
-export default function Page(){return <Studio/>}
+import { FreeMotionStudio } from "@/components/free-motion-studio";
+
+export default function Page() {
+  return <FreeMotionStudio />;
+}

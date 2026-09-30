@@ -1,5 +1,5 @@
-import { SimpleFreeStudio } from "@/components/simple-free-studio";
+import { AiFlyerStudio } from "@/components/ai-flyer-studio";
 
-export default function Page(){
-  return <SimpleFreeStudio/>;
+export default function Page() {
+  return <AiFlyerStudio />;
 }

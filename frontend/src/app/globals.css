@@ -98,3 +98,61 @@ body{overflow-x:hidden}
   .two-col{grid-template-columns:1fr}
   .result-panel{padding:14px}
 }
+
+/* WanGP local-first portal */
+.wangp-page{min-height:100vh;background:
+  radial-gradient(circle at 12% 0,rgba(209,254,23,.09),transparent 32rem),
+  radial-gradient(circle at 90% 15%,rgba(119,93,255,.07),transparent 26rem),
+  #070809;color:var(--text)}
+.wangp-topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:17px 22px;border-bottom:1px solid #20242a;background:rgba(7,8,9,.9);backdrop-filter:blur(18px)}
+.wangp-topbar b{display:block;font-size:13px;letter-spacing:.13em}
+.wangp-topbar small{display:block;margin-top:4px;color:#7f8793;font-size:9px;letter-spacing:.08em}
+.wangp-badge{padding:8px 11px;border:1px solid #384417;border-radius:999px;background:#151a0b;color:var(--lime);font-size:9px;font-weight:900;letter-spacing:.11em}
+.wangp-shell{width:min(1260px,100%);margin:auto;padding:52px 22px 80px}
+.wangp-hero{padding:34px 0 42px}
+.wangp-hero h1{max-width:1000px;margin:0;font-size:clamp(42px,7.2vw,92px);line-height:.92;letter-spacing:-.06em}
+.wangp-lead{max-width:920px;margin:22px 0 0;color:#a6adb8;font-size:16px;line-height:1.7}
+.wangp-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:25px}
+.primary-action,.secondary-action{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 18px;border-radius:11px;font-size:11px;font-weight:950;letter-spacing:.05em;text-decoration:none}
+.primary-action{background:var(--lime);color:#090b0c}
+.secondary-action{border:1px solid var(--line);background:#11141a;color:#eef1f5}
+.wangp-facts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:32px}
+.wangp-facts>div{padding:18px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,#16191e,#0e1014)}
+.wangp-facts strong{display:block;color:var(--lime);font-size:21px}
+.wangp-facts span{display:block;margin-top:4px;color:#7f8793;font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+.wangp-install,.wangp-features,.wangp-share,.license-panel{margin-top:18px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(180deg,rgba(23,26,31,.98),rgba(13,15,18,.98));box-shadow:0 24px 70px #0005}
+.wangp-install,.wangp-features{padding:24px}
+.section-title h2,.wangp-share h2{margin:0;font-size:clamp(27px,4vw,44px);letter-spacing:-.035em}
+.section-title>p:not(.eyebrow),.wangp-share p{max-width:820px;color:#969eaa;font-size:12px;line-height:1.65}
+.setup-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
+.setup-grid article{display:flex;flex-direction:column;gap:10px;padding:18px;border:1px solid #272b32;border-radius:15px;background:#0e1014}
+.setup-grid article>span{color:var(--lime);font-size:10px;font-weight:900;letter-spacing:.13em}
+.setup-grid h3{margin:0;font-size:16px}
+.setup-grid p,.setup-grid small{margin:0;color:#8d95a3;font-size:11px;line-height:1.5}
+.setup-grid code,.share-command code{display:block;overflow:auto;padding:10px;border:1px solid #272c34;border-radius:9px;background:#07090c;color:#d7dce5;font-size:10px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.setup-grid button,.share-command button{padding:10px;border:1px solid #3a421f;border-radius:9px;background:#191f0c;color:var(--lime);font-size:9px;font-weight:900;letter-spacing:.09em}
+.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:19px}
+.feature-grid article{padding:16px;border:1px solid #272b32;border-radius:13px;background:#0d0f13}
+.feature-grid b{font-size:10px;letter-spacing:.11em}
+.feature-grid p{margin:8px 0 0;color:#8f97a3;font-size:11px;line-height:1.55}
+.wangp-share{padding:24px;display:grid;grid-template-columns:1fr minmax(300px,.75fr);gap:24px;align-items:center}
+.share-command{display:flex;flex-direction:column;gap:9px}
+.license-panel{padding:18px 20px}
+.license-panel>b{display:block;color:#dce1e8;font-size:10px;letter-spacing:.13em}
+.license-panel p{margin:8px 0 0;color:#7f8793;font-size:10px;line-height:1.6}
+@media(max-width:900px){
+  .setup-grid,.feature-grid,.wangp-share{grid-template-columns:1fr}
+  .wangp-facts{grid-template-columns:1fr 1fr}
+}
+@media(max-width:600px){
+  .wangp-topbar{padding:13px 12px}
+  .wangp-topbar b{font-size:10px}
+  .wangp-badge{font-size:7px;padding:7px 8px}
+  .wangp-shell{padding:34px 10px 58px}
+  .wangp-hero{padding-top:18px}
+  .wangp-hero h1{font-size:45px}
+  .wangp-lead{font-size:13px}
+  .wangp-actions{display:grid;grid-template-columns:1fr}
+  .wangp-facts{grid-template-columns:1fr 1fr}
+  .wangp-install,.wangp-features,.wangp-share{padding:15px}
+}

@@ -246,7 +246,7 @@ export function FreeCinematicSuite(){
         <div className="connection-copy">
           <p className="eyebrow">CONNECT YOUR GENERATOR</p>
           <h2>127.0.0.1 only works on the computer running WanGP.</h2>
-          <p>On your iPhone, connect to the computer instead: use the computer's LAN address on the same Wi-Fi, such as <b>http://192.168.1.25:7860</b>, or paste the temporary <b>https://…gradio.live</b> share URL created by WanGP.</p>
+          <p>On your iPhone, connect to the computer instead: use the computer&apos;s LAN address on the same Wi-Fi, such as <b>http://192.168.1.25:7860</b>, or paste the temporary <b>https://…gradio.live</b> share URL created by WanGP.</p>
         </div>
         <div className="connection-box">
           <label>WANGP ADDRESS</label>
@@ -315,7 +315,7 @@ export function FreeCinematicSuite(){
                 </div>;
               })}
             </div>
-            <p className="upload-note">These previews stay on your phone/browser. WanGP runs on your computer, so after opening the connected generator, upload the same files into WanGP's native inputs for the actual render.</p>
+            <p className="upload-note">These previews stay on your phone/browser. WanGP runs on your computer, so after opening the connected generator, upload the same files into WanGP&apos;s native inputs for the actual render.</p>
           </section>}
 
           <div className="director-panel">

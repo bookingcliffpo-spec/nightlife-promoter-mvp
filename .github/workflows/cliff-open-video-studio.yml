@@ -1,0 +1,30 @@
+name: Cliff Open Video Studio CI
+
+on:
+  pull_request:
+    paths:
+      - "cliff-open-video-studio/**"
+      - ".github/workflows/cliff-open-video-studio.yml"
+  push:
+    branches:
+      - free-video-studio
+    paths:
+      - "cliff-open-video-studio/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cliff-open-video-studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: cliff-open-video-studio/package-lock.json
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

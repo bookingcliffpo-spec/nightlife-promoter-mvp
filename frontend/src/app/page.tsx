@@ -1,2 +1,5 @@
-import { FreeCinematicSuite } from "@/components/free-cinematic-suite";
-export default function Page(){ return <FreeCinematicSuite/>; }
+import { SimpleFreeStudio } from "@/components/simple-free-studio";
+
+export default function Page(){
+  return <SimpleFreeStudio/>;
+}

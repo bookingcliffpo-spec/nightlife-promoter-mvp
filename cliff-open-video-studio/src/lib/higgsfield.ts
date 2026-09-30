@@ -1,0 +1,53 @@
+import type { GenerationInput } from "./validation";
+
+const BASE="https://api.higgsfield.ai";
+export type Failure={ok:false;status:number;code:string;error:string};
+export type Success<T>={ok:true;data:T};
+export type Result<T>=Failure|Success<T>;
+
+async function body(res:Response):Promise<unknown>{
+  const text=await res.text();
+  if(!text)return null;
+  try{return JSON.parse(text)}catch{return text}
+}
+function detail(x:unknown):string{
+  if(typeof x==="string")return x.slice(0,500);
+  if(!x||typeof x!=="object")return "";
+  const r=x as Record<string,unknown>;
+  for(const k of ["detail","message","error"]){const v=r[k];if(typeof v==="string"&&v.trim())return v.trim().slice(0,500)}
+  return "";
+}
+export function failure(status:number,payload:unknown):Failure{
+  const d=detail(payload), low=d.toLowerCase();
+  if(status===401)return {ok:false,status,code:"invalid_credentials",error:"Higgsfield rejected the API key."};
+  if(status===402||(status===403&&/(credit|balance|enough|payment)/.test(low)))return {ok:false,status,code:"insufficient_credits",error:"The Higgsfield API account does not have enough credits."};
+  if(status===429)return {ok:false,status,code:"rate_limited",error:"Higgsfield is rate limiting this account. Try again shortly."};
+  if(status>=500)return {ok:false,status,code:"provider_unavailable",error:"Higgsfield is temporarily unavailable."};
+  return {ok:false,status,code:`provider_${status}`,error:d||`Higgsfield request failed (${status}).`};
+}
+async function call(key:string,path:string,init:RequestInit){
+  const c=new AbortController(),timer=setTimeout(()=>c.abort(),30000);
+  try{return await fetch(`${BASE}/${path}`,{...init,cache:"no-store",signal:c.signal,headers:{Authorization:`Key ${key}`,"Content-Type":"application/json"}})}
+  finally{clearTimeout(timer)}
+}
+export async function submit(key:string,input:GenerationInput):Promise<Result<{requestId:string}>>{
+  const path=input.imageUrl?"bytedance/seedance-2.5/image-to-video":"bytedance/seedance-2.5/text-to-video";
+  const data:Record<string,unknown>={prompt:input.prompt,duration:input.duration,resolution:input.resolution,output_format:input.outputFormat,generate_audio:input.generateAudio};
+  if(input.imageUrl){data.image_url=input.imageUrl;if(input.endImageUrl)data.end_image_url=input.endImageUrl}else data.aspect_ratio=input.aspectRatio;
+  try{
+    const res=await call(key,path,{method:"POST",body:JSON.stringify(data)}), payload=await body(res);
+    if(!res.ok)return failure(res.status,payload);
+    const r=payload&&typeof payload==="object"?payload as Record<string,unknown>:{};
+    const requestId=typeof r.request_id==="string"?r.request_id:"";
+    return requestId?{ok:true,data:{requestId}}:{ok:false,status:502,code:"bad_response",error:"Higgsfield did not return a request ID."};
+  }catch(e){return {ok:false,status:503,code:"network_error",error:e instanceof Error&&e.name==="AbortError"?"Higgsfield timed out.":"Could not reach Higgsfield."}}
+}
+export async function status(key:string,id:string):Promise<Result<{status:string;videoUrl?:string;error?:string}>>{
+  try{
+    const res=await call(key,`requests/${encodeURIComponent(id)}/status`,{method:"GET"}),payload=await body(res);
+    if(!res.ok)return failure(res.status,payload);
+    const r=payload&&typeof payload==="object"?payload as Record<string,unknown>:{};
+    const v=r.video&&typeof r.video==="object"?(r.video as Record<string,unknown>).url:undefined;
+    return {ok:true,data:{status:typeof r.status==="string"?r.status:"unknown",videoUrl:typeof v==="string"?v:undefined,error:typeof r.error==="string"?r.error:undefined}};
+  }catch{return {ok:false,status:503,code:"network_error",error:"Could not reach Higgsfield."}}
+}

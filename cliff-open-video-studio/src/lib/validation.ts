@@ -1,0 +1,48 @@
+export const ASPECTS = ["16:9","4:3","1:1","3:4","9:16","21:9"] as const;
+export const RESOLUTIONS = ["480p","720p"] as const;
+export const FORMATS = ["mp4","mov"] as const;
+
+export type GenerationInput = {
+  prompt: string;
+  duration: number;
+  resolution: (typeof RESOLUTIONS)[number];
+  aspectRatio: (typeof ASPECTS)[number];
+  outputFormat: (typeof FORMATS)[number];
+  generateAudio: boolean;
+  imageUrl?: string;
+  endImageUrl?: string;
+};
+
+export function validCredential(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const v=value.trim(), i=v.indexOf(":");
+  return i>0 && i<v.length-1;
+}
+function oneOf<T extends readonly string[]>(value: unknown, values: T, label: string): T[number] {
+  if (typeof value !== "string" || !values.includes(value)) throw new Error(`Unsupported ${label}.`);
+  return value as T[number];
+}
+function url(value: unknown): string|undefined {
+  if (typeof value!=="string" || !value.trim()) return undefined;
+  const u=new URL(value.trim());
+  if (!["http:","https:"].includes(u.protocol)) throw new Error("Media URLs must use HTTP or HTTPS.");
+  return u.toString();
+}
+export function parseGenerationInput(raw: unknown): GenerationInput {
+  if (!raw || typeof raw!=="object" || Array.isArray(raw)) throw new Error("Invalid request.");
+  const b=raw as Record<string,unknown>;
+  const prompt=typeof b.prompt==="string"?b.prompt.trim():"";
+  if (!prompt) throw new Error("Enter a prompt.");
+  const duration=Number(b.duration??5);
+  if (!Number.isInteger(duration)||duration<4||duration>30) throw new Error("Duration must be 4–30 seconds.");
+  const imageUrl=url(b.imageUrl), endImageUrl=url(b.endImageUrl);
+  if (endImageUrl && !imageUrl) throw new Error("An end image requires a start image.");
+  return {
+    prompt,duration,
+    resolution:oneOf(b.resolution??"720p",RESOLUTIONS,"resolution"),
+    aspectRatio:oneOf(b.aspectRatio??"9:16",ASPECTS,"aspect ratio"),
+    outputFormat:oneOf(b.outputFormat??"mp4",FORMATS,"format"),
+    generateAudio:b.generateAudio!==false,
+    imageUrl,endImageUrl
+  };
+}

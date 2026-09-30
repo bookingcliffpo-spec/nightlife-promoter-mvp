@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Check WanGP plugin syntax
-        run: python -m py_compile free-wangp/wan2gp-cliff-studio/plugin.py
+        run: python -m py_compile free-wangp/wan2gp-cliff-studio/plugin.py free-wangp/cloud_worker.py
       - name: Install frontend
         working-directory: frontend
         run: npm ci

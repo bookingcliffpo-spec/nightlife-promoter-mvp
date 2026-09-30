@@ -1,25 +1,25 @@
-name: Cliff Free Motion Studio Build
+name: Cliff Free Cinematic Studio Build
 
 on:
   pull_request:
     paths:
       - "frontend/**"
+      - "free-wangp/**"
       - ".github/workflows/cliff-live-preview.yml"
   push:
     branches:
       - main
       - free-video-studio
       - wangp-free-local
+      - free-cinematic-suite
     paths:
       - "frontend/**"
+      - "free-wangp/**"
       - ".github/workflows/cliff-live-preview.yml"
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     env:
       NEXT_PUBLIC_API_URL: http://localhost:4000
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
@@ -31,5 +31,14 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check WanGP plugin syntax
+        run: python -m py_compile free-wangp/wan2gp-cliff-studio/plugin.py
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build

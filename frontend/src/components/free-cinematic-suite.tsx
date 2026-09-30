@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 
 type Tool = {
   id: string;
@@ -9,6 +9,18 @@ type Tool = {
   model: string;
   description: string;
   requires?: string;
+};
+
+type Slot = {
+  id: string;
+  label: string;
+  accept: string;
+  kind: "image" | "video" | "audio";
+};
+
+type StagedMedia = {
+  file: File;
+  url: string;
 };
 
 const TOOLS: Tool[] = [
@@ -27,6 +39,65 @@ const TOOLS: Tool[] = [
   { id:"location-swap", name:"Location Swap", group:"GENJUTSU", model:"ltx2_22B_distilled_1_1_edit_anything", description:"Move the action into a new environment while retaining performance and camera.", requires:"Source video + location reference" },
   { id:"style-transfer", name:"Style Transfer", group:"GENJUTSU", model:"minimax_h3_control_pruned", description:"Keep motion structure while changing the visual treatment and atmosphere.", requires:"Source/control video" }
 ];
+
+const SLOTS: Record<string, Slot[]> = {
+  "text-video": [],
+  "image-video": [
+    { id:"start-image", label:"START IMAGE", accept:"image/*", kind:"image" }
+  ],
+  "start-end": [
+    { id:"start-image", label:"START IMAGE", accept:"image/*", kind:"image" },
+    { id:"end-image", label:"END IMAGE", accept:"image/*", kind:"image" }
+  ],
+  "reference-video": [
+    { id:"reference-image-1", label:"REFERENCE IMAGE 1", accept:"image/*", kind:"image" },
+    { id:"reference-image-2", label:"REFERENCE IMAGE 2", accept:"image/*", kind:"image" },
+    { id:"reference-video", label:"REFERENCE VIDEO", accept:"video/*", kind:"video" },
+    { id:"reference-audio", label:"REFERENCE AUDIO", accept:"audio/*", kind:"audio" }
+  ],
+  "multi-subject": [
+    { id:"subject-1", label:"SUBJECT / OBJECT 1", accept:"image/*", kind:"image" },
+    { id:"subject-2", label:"SUBJECT / OBJECT 2", accept:"image/*", kind:"image" },
+    { id:"subject-3", label:"SUBJECT / OBJECT 3", accept:"image/*", kind:"image" },
+    { id:"subject-4", label:"SUBJECT / OBJECT 4", accept:"image/*", kind:"image" },
+    { id:"subject-5", label:"BACKGROUND / EXTRA REF", accept:"image/*", kind:"image" }
+  ],
+  "extend": [
+    { id:"source-video", label:"SOURCE VIDEO", accept:"video/*", kind:"video" }
+  ],
+  "video-edit": [
+    { id:"source-video", label:"SOURCE VIDEO", accept:"video/*", kind:"video" },
+    { id:"edit-reference", label:"EDIT REFERENCE IMAGE", accept:"image/*", kind:"image" }
+  ],
+  "regional-edit": [
+    { id:"source-video", label:"SOURCE VIDEO", accept:"video/*", kind:"video" },
+    { id:"mask-image", label:"MASK IMAGE", accept:"image/*", kind:"image" }
+  ],
+  "motion-transfer": [
+    { id:"control-video", label:"MOTION / CONTROL VIDEO", accept:"video/*", kind:"video" },
+    { id:"character-reference", label:"OPTIONAL CHARACTER REFERENCE", accept:"image/*", kind:"image" }
+  ],
+  "character-swap": [
+    { id:"source-video", label:"SOURCE VIDEO", accept:"video/*", kind:"video" },
+    { id:"character-reference", label:"NEW CHARACTER REFERENCE", accept:"image/*", kind:"image" }
+  ],
+  "object-swap": [
+    { id:"source-video", label:"SOURCE VIDEO", accept:"video/*", kind:"video" },
+    { id:"product-reference", label:"OBJECT / PRODUCT REFERENCE", accept:"image/*", kind:"image" }
+  ],
+  "wardrobe-swap": [
+    { id:"source-video", label:"SOURCE VIDEO", accept:"video/*", kind:"video" },
+    { id:"wardrobe-reference", label:"WARDROBE REFERENCE", accept:"image/*", kind:"image" }
+  ],
+  "location-swap": [
+    { id:"source-video", label:"SOURCE VIDEO", accept:"video/*", kind:"video" },
+    { id:"location-reference", label:"LOCATION REFERENCE", accept:"image/*", kind:"image" }
+  ],
+  "style-transfer": [
+    { id:"source-video", label:"SOURCE / CONTROL VIDEO", accept:"video/*", kind:"video" },
+    { id:"style-reference", label:"STYLE REFERENCE", accept:"image/*", kind:"image" }
+  ]
+};
 
 const ratios: Record<string,string> = {
   "16:9":"1280x704",
@@ -60,7 +131,16 @@ export function FreeCinematicSuite(){
   const [duration,setDuration]=useState(5);
   const [audio,setAudio]=useState(true);
   const [copied,setCopied]=useState("");
+  const [generatorUrl,setGeneratorUrl]=useState("");
+  const [connectionMessage,setConnectionMessage]=useState("");
+  const [media,setMedia]=useState<Record<string,StagedMedia>>({});
   const tool=TOOLS.find(t=>t.id===toolId)!;
+  const slots=SLOTS[toolId]||[];
+
+  useEffect(()=>{
+    const saved=window.localStorage.getItem("cliff-wangp-url");
+    if(saved)setGeneratorUrl(saved);
+  },[]);
 
   const cinematicPrompt=useMemo(()=>{
     const sound=audio
@@ -80,7 +160,61 @@ export function FreeCinematicSuite(){
     try{await navigator.clipboard.writeText(value);setCopied(label);setTimeout(()=>setCopied(""),1600)}catch{}
   }
 
+  function slotKey(slotId:string){ return toolId+":"+slotId; }
+
+  function stageFile(slot:Slot,e:ChangeEvent<HTMLInputElement>){
+    const file=e.target.files?.[0];
+    if(!file)return;
+    const key=slotKey(slot.id);
+    setMedia(current=>{
+      const previous=current[key];
+      if(previous?.url)URL.revokeObjectURL(previous.url);
+      return {...current,[key]:{file,url:URL.createObjectURL(file)}};
+    });
+  }
+
+  function removeFile(slotId:string){
+    const key=slotKey(slotId);
+    setMedia(current=>{
+      const previous=current[key];
+      if(previous?.url)URL.revokeObjectURL(previous.url);
+      const next={...current};
+      delete next[key];
+      return next;
+    });
+  }
+
+  function saveGeneratorUrl(){
+    const value=generatorUrl.trim().replace(/\/$/,"");
+    if(!/^https?:\/\//i.test(value)){
+      setConnectionMessage("Enter the full WanGP address beginning with http:// or https://");
+      return;
+    }
+    setGeneratorUrl(value);
+    window.localStorage.setItem("cliff-wangp-url",value);
+    setConnectionMessage("Generator address saved on this device.");
+  }
+
+  function openGenerator(){
+    const value=generatorUrl.trim();
+    if(!/^https?:\/\//i.test(value)){
+      setConnectionMessage("Add your computer's WanGP address or temporary Gradio share URL first.");
+      return;
+    }
+    window.open(value,"_blank","noopener,noreferrer");
+  }
+
   function exportJob(){
+    const staged=slots.flatMap(slot=>{
+      const item=media[slotKey(slot.id)];
+      return item ? [{
+        slot:slot.id,
+        label:slot.label,
+        filename:item.file.name,
+        type:item.file.type,
+        size:item.file.size
+      }] : [];
+    });
     const job={
       model_type:tool.model,
       prompt:cinematicPrompt,
@@ -89,8 +223,10 @@ export function FreeCinematicSuite(){
       cliff_tool:tool.id,
       cliff_tool_name:tool.name,
       required_media:tool.requires||null,
+      staged_media:staged,
       generate_audio:audio,
-      notes:"Import this settings JSON into the local WanGP workflow. Complex edit/reference tools require the media listed in required_media."
+      generator_url:generatorUrl||null,
+      notes:"Media selected on the public site stays on this device. Open the connected WanGP generator and upload the same selected files into its native media inputs before generating."
     };
     const blob=new Blob([JSON.stringify(job,null,2)],{type:"application/json"});
     const url=URL.createObjectURL(blob);
@@ -106,12 +242,31 @@ export function FreeCinematicSuite(){
     </header>
 
     <section className="cinema-shell">
+      <section className="connection-panel">
+        <div className="connection-copy">
+          <p className="eyebrow">CONNECT YOUR GENERATOR</p>
+          <h2>127.0.0.1 only works on the computer running WanGP.</h2>
+          <p>On your iPhone, connect to the computer instead: use the computer&apos;s LAN address on the same Wi-Fi, such as <b>http://192.168.1.25:7860</b>, or paste the temporary <b>https://…gradio.live</b> share URL created by WanGP.</p>
+        </div>
+        <div className="connection-box">
+          <label>WANGP ADDRESS</label>
+          <input value={generatorUrl} onChange={e=>setGeneratorUrl(e.target.value)} placeholder="http://192.168.x.x:7860 or https://xxxx.gradio.live"/>
+          <div>
+            <button onClick={saveGeneratorUrl}>SAVE ADDRESS</button>
+            <button onClick={openGenerator}>OPEN GENERATOR</button>
+          </div>
+          <button className="localhost-button" onClick={()=>setGeneratorUrl("http://127.0.0.1:7860")}>USE 127.0.0.1 ON THIS COMPUTER</button>
+          <small>For a public phone-accessible link, run <b>free-wangp\public-share-windows.bat</b> on your computer, then paste the Gradio URL here.</small>
+          {connectionMessage&&<p className="connection-message">{connectionMessage}</p>}
+        </div>
+      </section>
+
       <section className="cinema-hero">
         <p className="eyebrow">OPEN GENERATION SUITE</p>
         <h1>Higgsfield-style creative tools without a credit meter.</h1>
-        <p>Build prompts here, then render with the included WanGP models on your own GPU. The public site is the creative front end; the heavy AI generation stays local so there is no per-video API charge.</p>
+        <p>Build prompts and stage your images, videos, masks, and audio here, then open the connected WanGP generator for the actual local AI render.</p>
         <div className="hero-buttons">
-          <a className="primary-action" href="http://127.0.0.1:7860" target="_blank" rel="noreferrer">OPEN LOCAL GENERATOR</a>
+          <button className="primary-action button-reset" onClick={openGenerator}>OPEN CONNECTED GENERATOR</button>
           <button className="secondary-button" onClick={()=>void copy("prompt",cinematicPrompt)}>{copied==="prompt"?"PROMPT COPIED":"COPY CINEMATIC PROMPT"}</button>
         </div>
       </section>
@@ -138,6 +293,31 @@ export function FreeCinematicSuite(){
             <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} rows={8} />
           </div>
 
+          {slots.length>0&&<section className="upload-panel">
+            <div className="upload-head">
+              <div><b>UPLOAD CHANNELS</b><span>Stage the exact media needed for this workflow.</span></div>
+              <small>{slots.length} INPUT{slots.length===1?"":"S"}</small>
+            </div>
+            <div className="upload-grid">
+              {slots.map(slot=>{
+                const item=media[slotKey(slot.id)];
+                return <div className={"upload-slot "+(item?"filled":"")} key={slot.id}>
+                  <div className="upload-slot-head"><b>{slot.label}</b>{item&&<button onClick={()=>removeFile(slot.id)}>REMOVE</button>}</div>
+                  {item ? <>
+                    <MediaPreview kind={slot.kind} url={item.url}/>
+                    <p title={item.file.name}>{item.file.name}</p>
+                    <small>{Math.max(0.1,item.file.size/1024/1024).toFixed(1)} MB</small>
+                    <label className="replace-upload"><input type="file" accept={slot.accept} onChange={e=>stageFile(slot,e)}/>REPLACE</label>
+                  </> : <label className="upload-drop">
+                    <input type="file" accept={slot.accept} onChange={e=>stageFile(slot,e)}/>
+                    <span>+</span><strong>UPLOAD {slot.kind.toUpperCase()}</strong><small>{slot.accept}</small>
+                  </label>}
+                </div>;
+              })}
+            </div>
+            <p className="upload-note">These previews stay on your phone/browser. WanGP runs on your computer, so after opening the connected generator, upload the same files into WanGP&apos;s native inputs for the actual render.</p>
+          </section>}
+
           <div className="director-panel">
             <div className="director-head"><b>DIRECTOR PANEL</b><span>Cinematic controls are folded directly into your final prompt.</span></div>
             <div className="director-grid">
@@ -160,8 +340,8 @@ export function FreeCinematicSuite(){
           </div>
 
           <div className="generate-row">
-            <button className="export-job" onClick={exportJob}>DOWNLOAD WANGP JOB JSON</button>
-            <a className="open-local" href="http://127.0.0.1:7860" target="_blank" rel="noreferrer">OPEN LOCAL GENERATOR →</a>
+            <button className="export-job" onClick={exportJob}>DOWNLOAD JOB + MEDIA MANIFEST</button>
+            <button className="open-local button-reset" onClick={openGenerator}>OPEN CONNECTED GENERATOR →</button>
           </div>
         </div>
       </section>
@@ -170,7 +350,7 @@ export function FreeCinematicSuite(){
         <div className="section-title"><p className="eyebrow">FULL TOOL MAP</p><h2>Create, reference, edit and transfer motion.</h2><p>Each module points to a real local WanGP model/workflow rather than a paid cloud endpoint.</p></div>
         <div className="capability-grid">{TOOLS.map(t=><article key={t.id}>
           <span>{t.group}</span><h3>{t.name}</h3><p>{t.description}</p><small>{t.requires?"INPUT: "+t.requires:"TEXT PROMPT"}</small>
-          <button onClick={()=>{setToolId(t.id);window.scrollTo({top:430,behavior:"smooth"})}}>USE TOOL</button>
+          <button onClick={()=>{setToolId(t.id);window.scrollTo({top:700,behavior:"smooth"})}}>USE TOOL</button>
         </article>)}</div>
       </section>
 
@@ -180,6 +360,12 @@ export function FreeCinematicSuite(){
       </section>
     </section>
   </main>
+}
+
+function MediaPreview({kind,url}:{kind:Slot["kind"];url:string}){
+  if(kind==="video")return <video className="upload-preview" src={url} controls playsInline/>;
+  if(kind==="audio")return <audio className="upload-audio" src={url} controls/>;
+  return <img className="upload-preview" src={url} alt="Uploaded reference preview"/>;
 }
 
 function Select({label,value,set,options}:{label:string;value:string;set:(v:string)=>void;options:string[]}){

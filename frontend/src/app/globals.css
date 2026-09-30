@@ -263,3 +263,54 @@ body{overflow-x:hidden}
   .capability-grid{grid-template-columns:1fr}
   .local-note{align-items:flex-start;flex-direction:column}
 }
+
+/* Mobile generator connection + upload channels */
+.button-reset{border:0;font:inherit;cursor:pointer}
+.connection-panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.7fr);gap:18px;align-items:stretch;margin-bottom:18px}
+.connection-copy,.connection-box{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,#171a1f,#0d0f13);padding:20px}
+.connection-copy h2{margin:0;font-size:clamp(24px,4vw,42px);letter-spacing:-.04em}
+.connection-copy p:not(.eyebrow){margin:12px 0 0;color:#979fab;font-size:12px;line-height:1.65}
+.connection-copy b{color:#dce1e8}
+.connection-box{display:flex;flex-direction:column;gap:9px}
+.connection-box>label{color:#7a838f;font-size:8px;font-weight:900;letter-spacing:.14em}
+.connection-box input{width:100%;min-height:44px;padding:0 12px;border:1px solid #2b3038;border-radius:10px;background:#090b0e;color:#f0f2f5;outline:none;font-size:11px}
+.connection-box input:focus{border-color:#6d7c1a}
+.connection-box>div{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.connection-box button{min-height:40px;padding:0 10px;border:1px solid #30351c;border-radius:9px;background:#171c0e;color:var(--lime);font-size:8px;font-weight:900;letter-spacing:.08em}
+.connection-box button+button{border-color:#30343c;background:#111419;color:#e7ebef}
+.connection-box .localhost-button{border-color:#2b3038;background:#0d0f13;color:#b6bdc7}
+.connection-box small{color:#737c88;font-size:9px;line-height:1.5}
+.connection-message{margin:3px 0 0;padding:9px 10px;border:1px solid #3b421d;border-radius:8px;background:#151a0d;color:#becf69;font-size:9px}
+.upload-panel{margin-top:16px;border:1px solid #292d34;border-radius:14px;background:#0b0d10;overflow:hidden}
+.upload-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid #242830}
+.upload-head>div b{display:block;font-size:9px;letter-spacing:.13em}
+.upload-head>div span{display:block;margin-top:4px;color:#747c88;font-size:9px}
+.upload-head>small{color:var(--lime);font-size:8px;font-weight:900;letter-spacing:.12em}
+.upload-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px}
+.upload-slot{min-height:190px;padding:10px;border:1px dashed #383e48;border-radius:12px;background:#0f1216}
+.upload-slot.filled{border-style:solid;border-color:#313720;background:#11150d}
+.upload-slot-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.upload-slot-head b{font-size:8px;letter-spacing:.1em;color:#b8bec7}
+.upload-slot-head button{border:0;background:transparent;color:#e59ca4;font-size:7px;font-weight:900}
+.upload-drop{min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;text-align:center;cursor:pointer}
+.upload-drop input,.replace-upload input{display:none}
+.upload-drop>span{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;background:var(--lime);color:#080a0a;font-size:24px}
+.upload-drop strong{font-size:9px;letter-spacing:.08em}
+.upload-drop small{color:#68717d;font-size:8px}
+.upload-preview{display:block;width:100%;height:160px;object-fit:contain;border-radius:9px;background:#050607}
+.upload-audio{width:100%;margin:30px 0 24px}
+.upload-slot>p{overflow:hidden;margin:8px 0 2px;color:#d8dde5;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+.upload-slot>small{color:#727b87;font-size:8px}
+.replace-upload{display:block;margin-top:8px;padding:8px;border:1px solid #333a1c;border-radius:8px;background:#171c0e;color:var(--lime);text-align:center;font-size:8px;font-weight:900;cursor:pointer}
+.upload-note{margin:0;padding:0 14px 13px;color:#6f7783;font-size:9px;line-height:1.55}
+.open-local.button-reset{border:1px solid #30343c}
+@media(max-width:900px){
+  .connection-panel{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .connection-copy,.connection-box{padding:14px}
+  .connection-copy h2{font-size:29px}
+  .connection-box>div{grid-template-columns:1fr}
+  .upload-grid{grid-template-columns:1fr}
+  .upload-slot{min-height:170px}
+}

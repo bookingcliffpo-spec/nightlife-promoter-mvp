@@ -3,8 +3,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  title: "Cliff Free Motion Studio",
-  description: "Free browser-based flyer and photo motion video creator. No login, API key, or generation credits."
+  title: "Cliff Video",
+  description: "Free upload, prompt, and generate video studio."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

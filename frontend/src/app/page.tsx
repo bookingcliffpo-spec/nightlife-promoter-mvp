@@ -1,2 +1,2 @@
-import { WanGPFreePortal } from "@/components/wangp-free-portal";
-export default function Page(){ return <WanGPFreePortal/>; }
+import { FreeCinematicSuite } from "@/components/free-cinematic-suite";
+export default function Page(){ return <FreeCinematicSuite/>; }

@@ -1,0 +1,9 @@
+gradio==5.49.1
+spaces
+torch
+diffusers>=0.39.0
+transformers
+accelerate
+sentencepiece
+imageio
+imageio-ffmpeg

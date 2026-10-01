@@ -195,7 +195,7 @@ function cleanCsvValues(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(cleanCsvValues);
   if (value === null || value === undefined) return [];
 
-  const cleaned = String(value).replace(/\u0000/g, '').trim();
+  const cleaned = String(value).split('\u0000').join('').trim();
   return cleaned ? [cleaned] : [];
 }
 

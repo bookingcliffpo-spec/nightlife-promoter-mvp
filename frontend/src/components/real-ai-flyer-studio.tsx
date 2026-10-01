@@ -1,293 +1,231 @@
 "use client";
 
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const SUPABASE_URL = "https://ntmunryoutmjqdxgmzpw.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_6CJ2zR2iEKoVR3Lsd_eECA_iIl7vd6P";
-const API_URL = SUPABASE_URL + "/functions/v1/flyer-video-api";
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-});
-
-type UploadItem = {
-  id: string;
-  file: File;
-  preview: string;
-};
+import { ChangeEvent, useRef, useState } from "react";
 
 type JobStatus = "idle" | "uploading" | "queued" | "processing" | "completed" | "failed" | "cancelled";
 
-type ActiveJob = {
-  jobId: string;
-  accessToken: string;
+const SPACE_ID = "Lightricks/ltx-video-distilled";
+const SPACE_ORIGIN = "https://lightricks-ltx-video-distilled.hf.space";
+const GRADIO_CDN = "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
+
+const DEFAULT_PROMPT = `Use the uploaded flyer as the exact first frame/reference. Create a cinematic luxury nightlife promo video for Instagram Reels, 9:16 vertical, 8 seconds, with smooth controlled motion.
+
+Keep the man's exact face, facial structure, skin tone, hairline, eyes, nose, lips, beard, clothing, jewelry, hands, pose, and recognizable identity unchanged. Do not redesign or beautify him. Keep every flyer word spelled exactly as shown and preserve the original typography, hierarchy, logos, date, venue information, and layout.
+
+Animate the scene with a slow cinematic camera push-in. Add subtle depth, atmospheric lighting, natural environmental motion, and realistic object-specific movement. Keep important text readable and keep the final frame clean and stable.
+
+STRICTLY AVOID: face morphing, body changes, lip movement, talking, blinking distortion, extra fingers, extra limbs, warped hands, duplicate people, changing jewelry, changing clothing, changing text, misspelled words, moving text out of position, disappearing logos, excessive camera shake, fast zooms, cartoon animation, HDR, AI sharpening, fake plastic skin, sparks, dust particles, graffiti, grunge, lens flares, or covering important text.`;
+
+const NEGATIVE_PROMPT =
+  "worst quality, low quality, inconsistent motion, blurry, jittery, distorted, warped face, face morphing, extra fingers, extra limbs, duplicate person, misspelled text, moving text, disappearing logo, plastic skin, HDR, AI sharpening, lens flare, sparks, dust, graffiti, grunge";
+
+const DIMENSIONS: Record<string,{height:number;width:number}> = {
+  "9:16": { height: 896, width: 512 },
+  "16:9": { height: 512, width: 896 },
+  "1:1": { height: 704, width: 704 },
+  "3:4": { height: 768, width: 576 },
+  "4:3": { height: 576, width: 768 },
 };
 
-type StatusPayload = {
-  id: string;
-  status: JobStatus;
-  progress: number;
-  error?: string | null;
-  output_url?: string | null;
-};
-
-const DEFAULT_PROMPT = `Use the uploaded flyer as the exact first frame/reference. Create a cinematic luxury nightlife promo video for Instagram Reels with smooth controlled motion.
-
-Preserve the person's exact recognizable identity, clothing, jewelry, pose, hands, skin tone, facial structure, hairline, eyes, nose, lips, beard, and natural skin texture. Keep all flyer text, logos, typography, spelling, date, venue information, hierarchy, and layout unchanged and readable.
-
-Add realistic cinematic depth, subtle parallax, atmospheric lighting, natural environmental motion, and object-specific movement described below. Do not morph the face or body, do not move text out of position, and do not invent extra people, limbs, hands, words, logos, or props.
-
-Animate this flyer cinematically:`;
-
-const STATUS_COPY: Record<string, string> = {
-  uploading: "Uploading your references…",
-  queued: "Waiting for the free AI engine…",
-  processing: "Generating your cinematic video…",
-  completed: "Your video is ready.",
-  failed: "Generation failed.",
-  cancelled: "Generation cancelled.",
-};
-
-function cleanMime(file: File) {
-  const type = (file.type || "").toLowerCase();
-  if (["image/jpeg","image/png","image/webp","image/heic","image/heif"].includes(type)) return type;
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  if (ext === "png") return "image/png";
-  if (ext === "webp") return "image/webp";
-  if (ext === "heic") return "image/heic";
-  if (ext === "heif") return "image/heif";
-  return "image/jpeg";
+function normalizeSpaceUrl(value: string) {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("/")) return SPACE_ORIGIN + value;
+  return value;
 }
 
-async function callApi<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
-  const response = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, ...payload }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error || "Request failed.");
-  return data as T;
+function extractVideoUrl(data: any): string {
+  const first = Array.isArray(data) ? data[0] : data;
+  if (!first) return "";
+  if (typeof first === "string") return normalizeSpaceUrl(first);
+  const video = first.video ?? first;
+  const url = video?.url ?? video?.path ?? first?.url ?? first?.path ?? "";
+  return normalizeSpaceUrl(String(url || ""));
+}
+
+async function dynamicGradio() {
+  const importer = new Function("u", "return import(u)") as (url: string) => Promise<any>;
+  return importer(GRADIO_CDN);
+}
+
+async function browserFriendlyImage(file: File): Promise<File | Blob> {
+  const type = (file.type || "").toLowerCase();
+  if (["image/jpeg","image/png","image/webp"].includes(type)) return file;
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("This image format could not be opened. Try JPG, PNG, or WebP."));
+      el.src = objectUrl;
+    });
+    const maxSide = 1800;
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not prepare the image.");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Could not convert the image.")), "image/jpeg", 0.95)
+    );
+    return blob;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 export function RealAiFlyerStudio() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [images, setImages] = useState<UploadItem[]>([]);
+  const submissionRef = useRef<any>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState("");
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [aspect, setAspect] = useState("9:16");
   const [duration, setDuration] = useState(8);
-  const [engineOnline, setEngineOnline] = useState<boolean | null>(null);
   const [status, setStatus] = useState<JobStatus>("idle");
   const [progress, setProgress] = useState(0);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState("Online ZeroGPU ready.");
   const [outputUrl, setOutputUrl] = useState("");
-  const [activeJob, setActiveJob] = useState<ActiveJob | null>(null);
 
   const busy = ["uploading","queued","processing"].includes(status);
 
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = null;
-  }, []);
-
-  const checkEngine = useCallback(async () => {
-    try {
-      const data = await callApi<{ online: boolean }>("engine_status");
-      setEngineOnline(Boolean(data.online));
-    } catch {
-      setEngineOnline(false);
-    }
-  }, []);
-
-  const pollJob = useCallback(async (job: ActiveJob) => {
-    try {
-      const data = await callApi<StatusPayload>("job_status", {
-        job_id: job.jobId,
-        access_token: job.accessToken,
-      });
-      setStatus(data.status);
-      setProgress(Math.max(0, Math.min(100, Number(data.progress || 0))));
-      setMessage(STATUS_COPY[data.status] || "");
-      if (data.status === "completed" && data.output_url) {
-        setOutputUrl(data.output_url);
-        localStorage.removeItem("cliff-ai-active-job");
-        stopPolling();
-      } else if (["failed","cancelled"].includes(data.status)) {
-        if (data.error) setMessage(data.error);
-        localStorage.removeItem("cliff-ai-active-job");
-        stopPolling();
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not check generation status.");
-    }
-  }, [stopPolling]);
-
-  useEffect(() => {
-    void checkEngine();
-    const engineTimer = setInterval(() => void checkEngine(), 10000);
-
-    const saved = localStorage.getItem("cliff-ai-active-job");
-    if (saved) {
-      try {
-        const job = JSON.parse(saved) as ActiveJob;
-        if (job.jobId && job.accessToken) {
-          setActiveJob(job);
-          setStatus("queued");
-          setMessage("Restoring your generation…");
-          void pollJob(job);
-          pollRef.current = setInterval(() => void pollJob(job), 3000);
-        }
-      } catch {
-        localStorage.removeItem("cliff-ai-active-job");
-      }
-    }
-
-    return () => {
-      clearInterval(engineTimer);
-      stopPolling();
-    };
-  }, [checkEngine, pollJob, stopPolling]);
-
-  const addFiles = (event: ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(event.target.files || [])
-      .filter((file) => file.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
-      .slice(0, Math.max(0, 8 - images.length));
-
-    if (!selected.length) return;
-
-    const next = selected.map((file) => ({
-      id: crypto.randomUUID(),
-      file,
-      preview: URL.createObjectURL(file),
-    }));
-    setImages((current) => [...current, ...next].slice(0, 8));
-    setMessage("");
+  const onFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = event.target.files?.[0];
+    if (!next) return;
+    if (preview) URL.revokeObjectURL(preview);
+    setFile(next);
+    setPreview(URL.createObjectURL(next));
+    setOutputUrl("");
+    setStatus("idle");
+    setProgress(0);
+    setMessage("Flyer loaded. Type your prompt and generate.");
     event.target.value = "";
   };
 
-  const removeImage = (id: string) => {
-    setImages((current) => {
-      const target = current.find((item) => item.id === id);
-      if (target) URL.revokeObjectURL(target.preview);
-      return current.filter((item) => item.id !== id);
-    });
-  };
-
   const reset = () => {
-    stopPolling();
-    images.forEach((item) => URL.revokeObjectURL(item.preview));
-    setImages([]);
+    try { submissionRef.current?.cancel?.(); } catch {}
+    submissionRef.current = null;
+    if (preview) URL.revokeObjectURL(preview);
+    setFile(null);
+    setPreview("");
     setPrompt(DEFAULT_PROMPT);
+    setAspect("9:16");
+    setDuration(8);
     setStatus("idle");
     setProgress(0);
-    setMessage("");
+    setMessage("Online ZeroGPU ready.");
     setOutputUrl("");
-    setActiveJob(null);
-    localStorage.removeItem("cliff-ai-active-job");
+  };
+
+  const cancel = () => {
+    try { submissionRef.current?.cancel?.(); } catch {}
+    submissionRef.current = null;
+    setStatus("cancelled");
+    setProgress(0);
+    setMessage("Generation cancelled.");
   };
 
   const generate = async () => {
-    if (engineOnline !== true) {
-      setMessage("AI engine is offline. Start the free AI engine on your computer first, then try again.");
-      setStatus("idle");
-      setProgress(0);
-      return;
-    }
-    if (!images.length) {
-      setMessage("Upload at least one image.");
+    if (!file) {
+      setMessage("Upload a flyer first.");
       return;
     }
     if (!prompt.trim()) {
-      setMessage("Type the video prompt you want.");
+      setMessage("Type the motion prompt you want.");
       return;
     }
 
-    stopPolling();
     setOutputUrl("");
     setStatus("uploading");
-    setProgress(2);
-    setMessage("Preparing your AI generation…");
+    setProgress(3);
+    setMessage("Connecting to the free online GPU…");
 
     try {
-      const create = await callApi<{
-        job_id: string;
-        access_token: string;
-        uploads: Array<{ index: number; path: string; token: string }>;
-      }>("create_job", {
-        prompt: prompt.trim(),
-        aspect_ratio: aspect,
-        duration_seconds: duration,
-        files: images.map((item) => ({
-          file_name: item.file.name,
-          mime_type: cleanMime(item.file),
-        })),
-      });
-
-      const job = { jobId: create.job_id, accessToken: create.access_token };
-      setActiveJob(job);
-      localStorage.setItem("cliff-ai-active-job", JSON.stringify(job));
-
-      for (const upload of create.uploads) {
-        const item = images[upload.index];
-        if (!item) throw new Error("Missing upload reference.");
-        setMessage(`Uploading reference ${upload.index + 1} of ${create.uploads.length}…`);
-        setProgress(4 + Math.round(((upload.index + 1) / create.uploads.length) * 16));
-
-        const { error } = await supabase.storage
-          .from("flyer-video-inputs")
-          .uploadToSignedUrl(upload.path, upload.token, item.file, {
-            contentType: cleanMime(item.file),
-          });
-        if (error) throw error;
-      }
-
-      await callApi("queue_job", {
-        job_id: job.jobId,
-        access_token: job.accessToken,
-      });
+      const { Client, handle_file } = await dynamicGradio();
+      const prepared = await browserFriendlyImage(file);
 
       setStatus("queued");
-      setProgress(20);
-      setMessage("Uploaded. Your AI video is queued…");
+      setProgress(8);
+      setMessage("Sending your flyer to the ZeroGPU queue…");
 
-      void pollJob(job);
-      pollRef.current = setInterval(() => void pollJob(job), 3000);
+      const client = await Client.connect(SPACE_ID, {
+        events: ["status", "data"],
+      });
+
+      const dims = DIMENSIONS[aspect] || DIMENSIONS["9:16"];
+      const submission = client.submit("/image_to_video", {
+        prompt: prompt.trim(),
+        negative_prompt: NEGATIVE_PROMPT,
+        input_image_filepath: handle_file(prepared),
+        input_video_filepath: null,
+        height_ui: dims.height,
+        width_ui: dims.width,
+        mode: "image-to-video",
+        duration_ui: Math.min(8.5, Number(duration)),
+        ui_frames_to_use: 9,
+        seed_ui: 42,
+        randomize_seed: true,
+        ui_guidance_scale: 1,
+        improve_texture_flag: true,
+      });
+
+      submissionRef.current = submission;
+      let foundVideo = "";
+
+      for await (const msg of submission) {
+        if (msg.type === "status") {
+          const stage = String(msg.stage || "");
+          if (stage === "pending") {
+            setStatus("queued");
+            setProgress(12);
+            const position = typeof msg.position === "number" ? ` Queue position: ${msg.position + 1}.` : "";
+            const eta = typeof msg.eta === "number" && Number.isFinite(msg.eta) ? ` ETA about ${Math.max(1, Math.round(msg.eta))}s.` : "";
+            setMessage("Waiting for free ZeroGPU capacity…" + position + eta);
+          } else if (stage === "generating") {
+            setStatus("processing");
+            const values = Array.isArray(msg.progress_data) ? msg.progress_data : [];
+            const p = values.length ? Number(values[values.length - 1]?.progress) : NaN;
+            const next = Number.isFinite(p) ? 20 + Math.round(Math.max(0, Math.min(1, p)) * 70) : 45;
+            setProgress(Math.max(20, Math.min(92, next)));
+            const desc = values.length ? String(values[values.length - 1]?.desc || "") : "";
+            setMessage(desc || "Generating your cinematic AI video…");
+          } else if (stage === "complete") {
+            setProgress(96);
+            setMessage("Finalizing your video…");
+          } else if (stage === "error") {
+            throw new Error(String(msg.message || "The online GPU generation failed."));
+          }
+        }
+
+        if (msg.type === "data") {
+          const url = extractVideoUrl(msg.data);
+          if (url) foundVideo = url;
+        }
+      }
+
+      submissionRef.current = null;
+      if (!foundVideo) {
+        throw new Error("The online model finished without returning a video.");
+      }
+
+      setOutputUrl(foundVideo);
+      setStatus("completed");
+      setProgress(100);
+      setMessage("Your AI video is ready.");
     } catch (error) {
+      submissionRef.current = null;
       setStatus("failed");
       setProgress(0);
-      setMessage(error instanceof Error ? error.message : "Could not start generation.");
+      const raw = error instanceof Error ? error.message : String(error);
+      const quota = /quota|gpu.*limit|exceeded|rate.?limit/i.test(raw);
+      setMessage(quota
+        ? "The free ZeroGPU quota is temporarily exhausted. Try again after the free quota resets."
+        : raw || "Could not generate the video.");
     }
   };
-
-  const cancel = async () => {
-    if (!activeJob) return;
-    try {
-      await callApi("cancel_job", {
-        job_id: activeJob.jobId,
-        access_token: activeJob.accessToken,
-      });
-      setStatus("cancelled");
-      setMessage("Generation cancelled.");
-      setProgress(0);
-      localStorage.removeItem("cliff-ai-active-job");
-      stopPolling();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not cancel generation.");
-    }
-  };
-
-  const engineLabel = engineOnline === null
-    ? "CHECKING AI ENGINE"
-    : engineOnline
-      ? "AI ENGINE ONLINE"
-      : "AI ENGINE OFFLINE";
-
-  const totalSize = useMemo(
-    () => images.reduce((sum, item) => sum + item.file.size, 0),
-    [images],
-  );
 
   return (
     <main className="real-ai-page">
@@ -296,80 +234,53 @@ export function RealAiFlyerStudio() {
           <b>CLIFF AI VIDEO</b>
           <span>FLYER → CINEMATIC VIDEO</span>
         </div>
-        <div className={"engine-pill " + (engineOnline ? "online" : "offline")}>
+        <div className="engine-pill online">
           <i />
-          {engineLabel}
+          ONLINE ZERO GPU
         </div>
       </header>
 
       <section className="real-ai-shell">
         <div className="real-ai-heading">
-          <p>FREE LOCAL AI • NO HIGGSFIELD CREDITS</p>
+          <p>FREE ONLINE AI • NO LOCAL SERVER</p>
           <h1>Upload. Prompt. Generate.</h1>
           <span>
-            Upload your flyer and reference images, describe exactly what should move,
-            and generate a real AI video.
+            Upload your flyer from your phone or computer, describe the motion you want,
+            and generate the video online.
           </span>
         </div>
-
-        {engineOnline === false && (
-          <div className="engine-offline-banner">
-            <div>
-              <b>FREE AI ENGINE IS OFFLINE</b>
-              <span>
-                Real AI generation cannot start until the WanGP engine is running on your computer.
-                Once it is on, this page detects it automatically.
-              </span>
-            </div>
-            <span className="engine-offline-code">NO GPU ENGINE CONNECTED</span>
-          </div>
-        )}
 
         <section className="real-ai-grid">
           <div className="real-ai-card creator-card">
             <div className="creator-section">
               <div className="creator-label">
-                <div><strong>1</strong><b>UPLOAD IMAGES</b></div>
-                <span>{images.length}/8</span>
+                <div><strong>1</strong><b>UPLOAD FLYER</b></div>
+                <span>{file ? "READY" : "1 IMAGE"}</span>
               </div>
 
-              {images.length === 0 ? (
+              {!preview ? (
                 <button className="reference-drop" onClick={() => inputRef.current?.click()}>
                   <span className="upload-icon">+</span>
-                  <b>ADD FLYER / REFERENCE IMAGES</b>
-                  <small>JPEG • PNG • WEBP • HEIC</small>
+                  <b>ADD FLYER / FIRST FRAME</b>
+                  <small>PHONE OR COMPUTER • JPG • PNG • WEBP • HEIC</small>
                 </button>
               ) : (
-                <>
-                  <div className="reference-grid">
-                    {images.map((item, index) => (
-                      <div className="reference-card" key={item.id}>
-                        <img src={item.preview} alt={index === 0 ? "First frame" : "Reference"} />
-                        <span>{index === 0 ? "FIRST FRAME" : `REF ${index + 1}`}</span>
-                        <button onClick={() => removeImage(item.id)} aria-label="Remove image">×</button>
-                      </div>
-                    ))}
-                    {images.length < 8 && (
-                      <button className="reference-add" onClick={() => inputRef.current?.click()}>
-                        <span>+</span>
-                        <small>ADD</small>
-                      </button>
-                    )}
+                <div className="single-reference">
+                  <img src={preview} alt="Uploaded flyer" />
+                  <div>
+                    <b>FIRST FRAME</b>
+                    <span>{file?.name}</span>
+                    <button onClick={() => inputRef.current?.click()}>REPLACE</button>
                   </div>
-                  <div className="reference-meta">
-                    <span>The first image is the exact first-frame reference.</span>
-                    <span>{(totalSize / 1024 / 1024).toFixed(1)} MB</span>
-                  </div>
-                </>
+                </div>
               )}
 
               <input
                 ref={inputRef}
                 className="hidden-file-input"
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                multiple
-                onChange={addFiles}
+                accept="image/*"
+                onChange={onFile}
               />
             </div>
 
@@ -382,10 +293,10 @@ export function RealAiFlyerStudio() {
                 className="real-ai-prompt"
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
-                placeholder="Describe exactly what should move, stay locked, glow, pulse, crawl, float, change, or remain unchanged."
+                placeholder="Describe exactly what should move, glow, pulse, crawl, float, shimmer, or stay locked."
               />
               <div className="prompt-help">
-                Your prompt goes directly to the local WanGP LTX-2.5 generation engine.
+                Your prompt is sent directly to an online LTX image-to-video ZeroGPU model.
               </div>
             </div>
 
@@ -407,7 +318,7 @@ export function RealAiFlyerStudio() {
                 <label>
                   <span>LENGTH</span>
                   <select value={duration} onChange={(event) => setDuration(Number(event.target.value))}>
-                    {[5,8,10,12,15].map((seconds) => (
+                    {[4,5,6,8].map((seconds) => (
                       <option key={seconds} value={seconds}>{seconds} SEC</option>
                     ))}
                   </select>
@@ -418,29 +329,29 @@ export function RealAiFlyerStudio() {
             <div className="generate-zone">
               <button
                 className="real-generate-button"
-                disabled={busy || engineOnline !== true || !images.length || !prompt.trim()}
+                disabled={busy || !file || !prompt.trim()}
                 onClick={() => void generate()}
               >
-                {busy ? "GENERATING…" : engineOnline === false ? "AI ENGINE OFFLINE" : engineOnline === null ? "CHECKING AI ENGINE…" : "GENERATE AI VIDEO"}
+                {busy ? "GENERATING…" : "GENERATE AI VIDEO"}
               </button>
               {busy && (
-                <button className="cancel-generation" onClick={() => void cancel()}>
+                <button className="cancel-generation" onClick={cancel}>
                   CANCEL
                 </button>
               )}
-              <p>{engineOnline === false ? "Turn on the free AI engine on your computer before generating." : "No account. No Higgsfield key. Generation uses your connected free local AI engine."}</p>
+              <p>Hosted online. No 127.0.0.1. No local computer worker required.</p>
             </div>
 
             {(message || status !== "idle") && (
               <div className={"generation-status " + status}>
                 <div className="status-row">
-                  <b>{STATUS_COPY[status] || "STATUS"}</b>
+                  <b>{status === "completed" ? "VIDEO READY" : status === "failed" ? "GENERATION ERROR" : status === "queued" ? "ZERO GPU QUEUE" : status === "processing" ? "AI GENERATING" : "STATUS"}</b>
                   <span>{progress}%</span>
                 </div>
                 <div className="status-track">
                   <div style={{ width: progress + "%" }} />
                 </div>
-                {message && <p>{message}</p>}
+                <p>{message}</p>
               </div>
             )}
           </div>
@@ -457,9 +368,9 @@ export function RealAiFlyerStudio() {
             <div className="result-stage">
               {outputUrl ? (
                 <video key={outputUrl} src={outputUrl} controls playsInline autoPlay loop />
-              ) : images[0] ? (
+              ) : preview ? (
                 <div className="waiting-preview">
-                  <img src={images[0].preview} alt="First frame preview" />
+                  <img src={preview} alt="First frame preview" />
                   <div className="waiting-overlay">
                     <span>{busy ? progress + "%" : "READY"}</span>
                   </div>
@@ -480,16 +391,16 @@ export function RealAiFlyerStudio() {
               </div>
             ) : (
               <div className="result-rules">
-                <div><b>FIRST FRAME LOCK</b><span>Image 1 starts the generation.</span></div>
-                <div><b>REFERENCE GUIDANCE</b><span>Extra images guide identity and details.</span></div>
-                <div><b>PROMPT DRIVEN</b><span>Describe specific camera, object, light and atmosphere motion.</span></div>
+                <div><b>FIRST FRAME</b><span>Your uploaded flyer starts the generation.</span></div>
+                <div><b>PROMPT DRIVEN</b><span>Describe camera, object, light and atmosphere motion.</span></div>
+                <div><b>ONLINE GPU</b><span>Hugging Face ZeroGPU handles the AI render.</span></div>
               </div>
             )}
           </aside>
         </section>
 
         <footer className="real-ai-footer">
-          <span>REAL AI BACKEND: WANGP + LTX-2.5</span>
+          <span>ONLINE ENGINE: LTX VIDEO • HUGGING FACE ZERO GPU</span>
           <button onClick={reset}>RESET STUDIO</button>
         </footer>
       </section>

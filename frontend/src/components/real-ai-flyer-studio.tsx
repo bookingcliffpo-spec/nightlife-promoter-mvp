@@ -4,8 +4,11 @@ import { ChangeEvent, useRef, useState } from "react";
 
 type JobStatus = "idle" | "uploading" | "queued" | "processing" | "completed" | "failed" | "cancelled";
 
-const SPACE_ID = "Lightricks/ltx-video-distilled";
-const SPACE_ORIGIN = "https://lightricks-ltx-video-distilled.hf.space";
+const LTX_SPACE_ID = "Lightricks/ltx-video-distilled";
+const LTX_SPACE_ORIGIN = "https://lightricks-ltx-video-distilled.hf.space";
+const WAN22_SPACE_ID = "zerogpu-aoti/wan2-2-fp8da-aoti-faster";
+const WAN22_SPACE_ORIGIN = "https://zerogpu-aoti-wan2-2-fp8da-aoti-faster.hf.space";
+const WAN21_SPACE_ID = "Wan-AI/Wan2.1";
 const GRADIO_CDN = "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
 
 const DEFAULT_PROMPT = `Use the uploaded flyer as the exact first frame/reference. Create a cinematic luxury nightlife promo video for Instagram Reels, 9:16 vertical, 8 seconds, with smooth controlled motion.
@@ -27,20 +30,60 @@ const DIMENSIONS: Record<string,{height:number;width:number}> = {
   "4:3": { height: 576, width: 768 },
 };
 
-function normalizeSpaceUrl(value: string) {
+function normalizeSpaceUrl(value: string, origin = "") {
   if (!value) return "";
   if (/^https?:\/\//i.test(value)) return value;
-  if (value.startsWith("/")) return SPACE_ORIGIN + value;
+  if (value.startsWith("/") && origin) return origin + value;
   return value;
 }
 
-function extractVideoUrl(data: any): string {
-  const first = Array.isArray(data) ? data[0] : data;
-  if (!first) return "";
-  if (typeof first === "string") return normalizeSpaceUrl(first);
-  const video = first.video ?? first;
-  const url = video?.url ?? video?.path ?? first?.url ?? first?.path ?? "";
-  return normalizeSpaceUrl(String(url || ""));
+function extractVideoUrl(data: any, origin = ""): string {
+  const seen = new Set<any>();
+  const walk = (node: any): string => {
+    if (!node || seen.has(node)) return "";
+    if (typeof node === "string") {
+      if (/^https?:\/\//i.test(node)) return node;
+      if (/\.(mp4|webm|mov)(\?|$)/i.test(node)) return normalizeSpaceUrl(node, origin);
+      return "";
+    }
+    if (typeof node !== "object") return "";
+    seen.add(node);
+
+    if (typeof node.url === "string") return normalizeSpaceUrl(node.url, origin);
+    if (typeof node.path === "string" && /\.(mp4|webm|mov)(\?|$)/i.test(node.path)) {
+      return normalizeSpaceUrl(node.path, origin);
+    }
+    if (node.video) {
+      const hit = walk(node.video);
+      if (hit) return hit;
+    }
+    if (node.value) {
+      const hit = walk(node.value);
+      if (hit) return hit;
+    }
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const hit = walk(item);
+        if (hit) return hit;
+      }
+      return "";
+    }
+    for (const value of Object.values(node)) {
+      const hit = walk(value);
+      if (hit) return hit;
+    }
+    return "";
+  };
+  return walk(data);
+}
+
+function isQuotaLike(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error);
+  return /quota|gpu.*limit|exceeded|rate.?limit|429|zero.?gpu|no.*gpu|capacity/i.test(raw);
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function dynamicGradio() {
@@ -80,6 +123,7 @@ async function browserFriendlyImage(file: File): Promise<File | Blob> {
 export function RealAiFlyerStudio() {
   const inputRef = useRef<HTMLInputElement>(null);
   const submissionRef = useRef<any>(null);
+  const cancelledRef = useRef(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
@@ -106,6 +150,7 @@ export function RealAiFlyerStudio() {
   };
 
   const reset = () => {
+    cancelledRef.current = true;
     try { submissionRef.current?.cancel?.(); } catch {}
     submissionRef.current = null;
     if (preview) URL.revokeObjectURL(preview);
@@ -121,6 +166,7 @@ export function RealAiFlyerStudio() {
   };
 
   const cancel = () => {
+    cancelledRef.current = true;
     try { submissionRef.current?.cancel?.(); } catch {}
     submissionRef.current = null;
     setStatus("cancelled");
@@ -138,92 +184,219 @@ export function RealAiFlyerStudio() {
       return;
     }
 
+    cancelledRef.current = false;
     setOutputUrl("");
     setStatus("uploading");
     setProgress(3);
-    setMessage("Connecting to the free online GPU…");
+    setMessage("Connecting to an online AI video engine…");
 
     try {
       const { Client, handle_file } = await dynamicGradio();
       const prepared = await browserFriendlyImage(file);
+      const promptText = prompt.trim();
 
-      setStatus("queued");
-      setProgress(8);
-      setMessage("Sending your flyer to the ZeroGPU queue…");
+      const runLtx = async () => {
+        setStatus("queued");
+        setProgress(8);
+        setMessage("Trying LTX online GPU…");
 
-      const client = await Client.connect(SPACE_ID, {
-        events: ["status", "data"],
-      });
+        const client = await Client.connect(LTX_SPACE_ID, { events: ["status", "data"] });
+        const dims = DIMENSIONS[aspect] || DIMENSIONS["9:16"];
+        const submission = client.submit("/image_to_video", {
+          prompt: promptText,
+          negative_prompt: NEGATIVE_PROMPT,
+          input_image_filepath: handle_file(prepared),
+          input_video_filepath: null,
+          height_ui: dims.height,
+          width_ui: dims.width,
+          mode: "image-to-video",
+          duration_ui: Math.min(8.5, Number(duration)),
+          ui_frames_to_use: 9,
+          seed_ui: 42,
+          randomize_seed: true,
+          ui_guidance_scale: 1,
+          improve_texture_flag: true,
+        });
 
-      const dims = DIMENSIONS[aspect] || DIMENSIONS["9:16"];
-      const submission = client.submit("/image_to_video", {
-        prompt: prompt.trim(),
-        negative_prompt: NEGATIVE_PROMPT,
-        input_image_filepath: handle_file(prepared),
-        input_video_filepath: null,
-        height_ui: dims.height,
-        width_ui: dims.width,
-        mode: "image-to-video",
-        duration_ui: Math.min(8.5, Number(duration)),
-        ui_frames_to_use: 9,
-        seed_ui: 42,
-        randomize_seed: true,
-        ui_guidance_scale: 1,
-        improve_texture_flag: true,
-      });
+        submissionRef.current = submission;
+        let foundVideo = "";
 
-      submissionRef.current = submission;
-      let foundVideo = "";
-
-      for await (const msg of submission) {
-        if (msg.type === "status") {
-          const stage = String(msg.stage || "");
-          if (stage === "pending") {
-            setStatus("queued");
-            setProgress(12);
-            const position = typeof msg.position === "number" ? ` Queue position: ${msg.position + 1}.` : "";
-            const eta = typeof msg.eta === "number" && Number.isFinite(msg.eta) ? ` ETA about ${Math.max(1, Math.round(msg.eta))}s.` : "";
-            setMessage("Waiting for free ZeroGPU capacity…" + position + eta);
-          } else if (stage === "generating") {
-            setStatus("processing");
-            const values = Array.isArray(msg.progress_data) ? msg.progress_data : [];
-            const p = values.length ? Number(values[values.length - 1]?.progress) : NaN;
-            const next = Number.isFinite(p) ? 20 + Math.round(Math.max(0, Math.min(1, p)) * 70) : 45;
-            setProgress(Math.max(20, Math.min(92, next)));
-            const desc = values.length ? String(values[values.length - 1]?.desc || "") : "";
-            setMessage(desc || "Generating your cinematic AI video…");
-          } else if (stage === "complete") {
-            setProgress(96);
-            setMessage("Finalizing your video…");
-          } else if (stage === "error") {
-            throw new Error(String(msg.message || "The online GPU generation failed."));
+        for await (const msg of submission) {
+          if (cancelledRef.current) throw new Error("Generation cancelled.");
+          if (msg.type === "status") {
+            const stage = String(msg.stage || "");
+            if (stage === "pending") {
+              setStatus("queued");
+              setProgress(12);
+              const position = typeof msg.position === "number" ? ` Queue position: ${msg.position + 1}.` : "";
+              const eta = typeof msg.eta === "number" && Number.isFinite(msg.eta)
+                ? ` ETA about ${Math.max(1, Math.round(msg.eta))}s.`
+                : "";
+              setMessage("Waiting for LTX capacity…" + position + eta);
+            } else if (stage === "generating") {
+              setStatus("processing");
+              const values = Array.isArray(msg.progress_data) ? msg.progress_data : [];
+              const p = values.length ? Number(values[values.length - 1]?.progress) : NaN;
+              const next = Number.isFinite(p) ? 20 + Math.round(Math.max(0, Math.min(1, p)) * 65) : 45;
+              setProgress(Math.max(20, Math.min(88, next)));
+              const desc = values.length ? String(values[values.length - 1]?.desc || "") : "";
+              setMessage(desc || "LTX is generating your video…");
+            } else if (stage === "error") {
+              throw new Error(String(msg.message || "LTX generation failed."));
+            }
+          }
+          if (msg.type === "data") {
+            const url = extractVideoUrl(msg.data, LTX_SPACE_ORIGIN);
+            if (url) foundVideo = url;
           }
         }
 
-        if (msg.type === "data") {
-          const url = extractVideoUrl(msg.data);
-          if (url) foundVideo = url;
+        if (!foundVideo) throw new Error("LTX finished without returning a video.");
+        return foundVideo;
+      };
+
+      const runWan22 = async () => {
+        setStatus("queued");
+        setProgress(10);
+        setMessage("LTX is unavailable. Switching automatically to Wan 2.2…");
+
+        const client = await Client.connect(WAN22_SPACE_ID, { events: ["status", "data"] });
+        const submission = client.submit("/generate_video", {
+          input_image: handle_file(prepared),
+          prompt: promptText,
+          steps: 4,
+          negative_prompt: NEGATIVE_PROMPT,
+          duration_seconds: Math.min(5, Number(duration)),
+          guidance_scale: 1,
+          guidance_scale_2: 1,
+          seed: 42,
+          randomize_seed: true,
+        });
+
+        submissionRef.current = submission;
+        let foundVideo = "";
+
+        for await (const msg of submission) {
+          if (cancelledRef.current) throw new Error("Generation cancelled.");
+          if (msg.type === "status") {
+            const stage = String(msg.stage || "");
+            if (stage === "pending") {
+              setStatus("queued");
+              setProgress(15);
+              const position = typeof msg.position === "number" ? ` Queue position: ${msg.position + 1}.` : "";
+              const eta = typeof msg.eta === "number" && Number.isFinite(msg.eta)
+                ? ` ETA about ${Math.max(1, Math.round(msg.eta))}s.`
+                : "";
+              setMessage("Waiting for Wan 2.2…" + position + eta);
+            } else if (stage === "generating") {
+              setStatus("processing");
+              const values = Array.isArray(msg.progress_data) ? msg.progress_data : [];
+              const p = values.length ? Number(values[values.length - 1]?.progress) : NaN;
+              const next = Number.isFinite(p) ? 25 + Math.round(Math.max(0, Math.min(1, p)) * 65) : 50;
+              setProgress(Math.max(25, Math.min(92, next)));
+              const desc = values.length ? String(values[values.length - 1]?.desc || "") : "";
+              setMessage(desc || "Wan 2.2 is generating your video…");
+            } else if (stage === "error") {
+              throw new Error(String(msg.message || "Wan 2.2 generation failed."));
+            }
+          }
+          if (msg.type === "data") {
+            const url = extractVideoUrl(msg.data, WAN22_SPACE_ORIGIN);
+            if (url) foundVideo = url;
+          }
+        }
+
+        if (!foundVideo) throw new Error("Wan 2.2 finished without returning a video.");
+        return foundVideo;
+      };
+
+      const runWan21 = async () => {
+        setStatus("queued");
+        setProgress(12);
+        setMessage("Free GPU pool is busy. Switching to the official Wan 2.1 public service…");
+
+        const client = await Client.connect(WAN21_SPACE_ID);
+        await client.predict("/i2v_generation_async", {
+          prompt: promptText,
+          image: handle_file(prepared),
+          watermark_wan: false,
+          seed: -1,
+        });
+
+        for (let attempt = 0; attempt < 50; attempt++) {
+          if (cancelledRef.current) throw new Error("Generation cancelled.");
+          await wait(4000);
+          const poll = await client.predict("/status_refresh_1", {});
+          const url = extractVideoUrl(poll.data);
+          if (url) return url;
+
+          const numeric = Array.isArray(poll.data)
+            ? poll.data.find((value: any) => typeof value === "number" && value >= 0 && value <= 100)
+            : undefined;
+          setStatus("processing");
+          const pct = typeof numeric === "number" ? Math.max(20, Math.min(95, Math.round(numeric))) : Math.min(92, 25 + attempt);
+          setProgress(pct);
+          setMessage("Official Wan service is generating your video…");
+        }
+
+        throw new Error("The official Wan service is too busy right now.");
+      };
+
+      let videoUrl = "";
+      const failures: string[] = [];
+
+      try {
+        videoUrl = await runLtx();
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : String(error));
+        if (cancelledRef.current) throw error;
+      }
+
+      if (!videoUrl) {
+        try {
+          videoUrl = await runWan22();
+        } catch (error) {
+          failures.push(error instanceof Error ? error.message : String(error));
+          if (cancelledRef.current) throw error;
+        }
+      }
+
+      if (!videoUrl) {
+        try {
+          videoUrl = await runWan21();
+        } catch (error) {
+          failures.push(error instanceof Error ? error.message : String(error));
+          if (cancelledRef.current) throw error;
         }
       }
 
       submissionRef.current = null;
-      if (!foundVideo) {
-        throw new Error("The online model finished without returning a video.");
+
+      if (!videoUrl) {
+        const quotaOnly = failures.length > 0 && failures.every((item) => isQuotaLike(item));
+        throw new Error(
+          quotaOnly
+            ? "All free online GPU capacity is currently used. The site tried every available free engine automatically."
+            : failures[failures.length - 1] || "No online engine returned a video."
+        );
       }
 
-      setOutputUrl(foundVideo);
+      setOutputUrl(videoUrl);
       setStatus("completed");
       setProgress(100);
       setMessage("Your AI video is ready.");
     } catch (error) {
       submissionRef.current = null;
+      if (cancelledRef.current) {
+        setStatus("cancelled");
+        setProgress(0);
+        setMessage("Generation cancelled.");
+        return;
+      }
       setStatus("failed");
       setProgress(0);
       const raw = error instanceof Error ? error.message : String(error);
-      const quota = /quota|gpu.*limit|exceeded|rate.?limit/i.test(raw);
-      setMessage(quota
-        ? "The free ZeroGPU quota is temporarily exhausted. Try again after the free quota resets."
-        : raw || "Could not generate the video.");
+      setMessage(raw || "Could not generate the video.");
     }
   };
 
@@ -236,13 +409,13 @@ export function RealAiFlyerStudio() {
         </div>
         <div className="engine-pill online">
           <i />
-          ONLINE ZERO GPU
+          AUTO AI ENGINES
         </div>
       </header>
 
       <section className="real-ai-shell">
         <div className="real-ai-heading">
-          <p>FREE ONLINE AI • NO LOCAL SERVER</p>
+          <p>FREE ONLINE AI • AUTOMATIC FALLBACK</p>
           <h1>Upload. Prompt. Generate.</h1>
           <span>
             Upload your flyer from your phone or computer, describe the motion you want,
@@ -296,7 +469,7 @@ export function RealAiFlyerStudio() {
                 placeholder="Describe exactly what should move, glow, pulse, crawl, float, shimmer, or stay locked."
               />
               <div className="prompt-help">
-                Your prompt is sent directly to an online LTX image-to-video ZeroGPU model.
+                The site automatically tries LTX, Wan 2.2, then the official Wan service if an engine is full.
               </div>
             </div>
 
@@ -393,14 +566,14 @@ export function RealAiFlyerStudio() {
               <div className="result-rules">
                 <div><b>FIRST FRAME</b><span>Your uploaded flyer starts the generation.</span></div>
                 <div><b>PROMPT DRIVEN</b><span>Describe camera, object, light and atmosphere motion.</span></div>
-                <div><b>ONLINE GPU</b><span>Hugging Face ZeroGPU handles the AI render.</span></div>
+                <div><b>AUTO FALLBACK</b><span>The site switches engines automatically when one is full.</span></div>
               </div>
             )}
           </aside>
         </section>
 
         <footer className="real-ai-footer">
-          <span>ONLINE ENGINE: LTX VIDEO • HUGGING FACE ZERO GPU</span>
+          <span>ONLINE ENGINES: LTX • WAN 2.2 • OFFICIAL WAN FALLBACK</span>
           <button onClick={reset}>RESET STUDIO</button>
         </footer>
       </section>

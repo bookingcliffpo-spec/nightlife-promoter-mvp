@@ -250,9 +250,7 @@ export function RealAiFlyerStudio() {
 
       setStatus("queued");
       setProgress(20);
-      setMessage(engineOnline === false
-        ? "Uploaded. Waiting for the free AI engine to come online…"
-        : "Uploaded. Your AI video is queued…");
+      setMessage("Uploaded. Your AI video is queued…");
 
       void pollJob(job);
       pollRef.current = setInterval(() => void pollJob(job), 3000);

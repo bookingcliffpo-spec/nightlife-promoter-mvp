@@ -150,10 +150,6 @@ export function RealAiFlyerStudio() {
     };
   }, [checkEngine, pollJob, stopPolling]);
 
-  useEffect(() => {
-    return () => images.forEach((item) => URL.revokeObjectURL(item.preview));
-  }, [images]);
-
   const addFiles = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files || [])
       .filter((file) => file.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))

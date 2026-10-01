@@ -189,6 +189,12 @@ export function RealAiFlyerStudio() {
   };
 
   const generate = async () => {
+    if (engineOnline !== true) {
+      setMessage("AI engine is offline. Start the free AI engine on your computer first, then try again.");
+      setStatus("idle");
+      setProgress(0);
+      return;
+    }
     if (!images.length) {
       setMessage("Upload at least one image.");
       return;
@@ -308,6 +314,19 @@ export function RealAiFlyerStudio() {
           </span>
         </div>
 
+        {engineOnline === false && (
+          <div className="engine-offline-banner">
+            <div>
+              <b>FREE AI ENGINE IS OFFLINE</b>
+              <span>
+                Real AI generation cannot start until the WanGP engine is running on your computer.
+                Once it is on, this page detects it automatically.
+              </span>
+            </div>
+            <span className="engine-offline-code">NO GPU ENGINE CONNECTED</span>
+          </div>
+        )}
+
         <section className="real-ai-grid">
           <div className="real-ai-card creator-card">
             <div className="creator-section">
@@ -401,17 +420,17 @@ export function RealAiFlyerStudio() {
             <div className="generate-zone">
               <button
                 className="real-generate-button"
-                disabled={busy || !images.length || !prompt.trim()}
+                disabled={busy || engineOnline !== true || !images.length || !prompt.trim()}
                 onClick={() => void generate()}
               >
-                {busy ? "GENERATING…" : "GENERATE AI VIDEO"}
+                {busy ? "GENERATING…" : engineOnline === false ? "AI ENGINE OFFLINE" : engineOnline === null ? "CHECKING AI ENGINE…" : "GENERATE AI VIDEO"}
               </button>
               {busy && (
                 <button className="cancel-generation" onClick={() => void cancel()}>
                   CANCEL
                 </button>
               )}
-              <p>No account. No Higgsfield key. Generation uses your connected free local AI engine.</p>
+              <p>{engineOnline === false ? "Turn on the free AI engine on your computer before generating." : "No account. No Higgsfield key. Generation uses your connected free local AI engine."}</p>
             </div>
 
             {(message || status !== "idle") && (

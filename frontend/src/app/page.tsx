@@ -1,5 +1,5 @@
-import { RealAiFlyerStudio } from "@/components/real-ai-flyer-studio";
+import { PrimeHiggsMotion } from "@/components/prime-higgs-motion";
 
 export default function Page() {
-  return <RealAiFlyerStudio />;
+  return <PrimeHiggsMotion />;
 }

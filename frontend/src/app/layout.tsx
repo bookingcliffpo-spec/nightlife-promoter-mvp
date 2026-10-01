@@ -3,8 +3,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  title: "Cliff AI Video",
-  description: "Upload a flyer, type a prompt, and generate a cinematic AI video online with LTX Video on Hugging Face ZeroGPU.",
+  title: "Prime Higgs Motion",
+  description: "Cinematic AI video generation studio.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,5 +1,5 @@
-import { AiFlyerStudio } from "@/components/ai-flyer-studio";
+import { RealAiFlyerStudio } from "@/components/real-ai-flyer-studio";
 
 export default function Page() {
-  return <AiFlyerStudio />;
+  return <RealAiFlyerStudio />;
 }

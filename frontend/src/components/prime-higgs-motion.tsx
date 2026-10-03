@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Layers3,
   Loader2,
+  Music2,
   Paperclip,
   SlidersHorizontal,
   Sparkles,
@@ -17,17 +18,12 @@ import {
   X,
 } from "lucide-react";
 import { ChangeEvent, useMemo, useRef, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 type Ratio = "1:1" | "3:4" | "9:16";
-type Resolution = "480p" | "720p";
+type OutputQuality = "1080p" | "4K" | "8K";
 type StudioTab = "settings" | "media" | "upload";
 type JobStatus = "queued" | "generating" | "done" | "error" | "cancelled";
-
-type GenerationFailure = {
-  engine: string;
-  category: string;
-  message: string;
-};
 
 type StudioJob = {
   id: string;
@@ -38,14 +34,53 @@ type StudioJob = {
   outputUrl?: string;
   engine?: string;
   error?: string;
-  explanation?: string;
-  failures?: GenerationFailure[];
 };
 
 const SUPABASE_URL = "https://ntmunryoutmjqdxgmzpw.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_6CJ2zR2iEKoVR3Lsd_eECA_iIl7vd6P";
 const VIDEO_PROXY_URL = SUPABASE_URL + "/functions/v1/video-generate-proxy";
+const AUDIO_SIGNER_URL = SUPABASE_URL + "/functions/v1/audio-upload-signer";
 
 const ratios: Ratio[] = ["1:1", "3:4", "9:16"];
+
+const outputDimensions: Record<OutputQuality, Record<Ratio, string>> = {
+  "1080p": { "1:1": "1080×1080", "3:4": "1080×1440", "9:16": "1080×1920" },
+  "4K": { "1:1": "2160×2160", "3:4": "2160×2880", "9:16": "2160×3840" },
+  "8K": { "1:1": "4320×4320", "3:4": "4320×5760", "9:16": "4320×7680" },
+};
+
+async function uploadSoundtrack(file: File): Promise<string> {
+  const rawExt = file.name.includes(".") ? file.name.split(".").pop() || "mp3" : "mp3";
+  const ext = rawExt.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8) || "mp3";
+  const id = crypto.randomUUID();
+
+  const signerResponse = await fetch(AUDIO_SIGNER_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, ext }),
+  });
+
+  const signer = await signerResponse.json().catch(() => ({}));
+  if (!signerResponse.ok || !signer?.path || !signer?.token || !signer?.public_url) {
+    throw new Error(signer?.error || "Could not prepare soundtrack upload.");
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const { error } = await supabase.storage
+    .from("audio-uploads")
+    .uploadToSignedUrl(
+      String(signer.path),
+      String(signer.token),
+      file,
+      { contentType: file.type || "audio/mpeg" },
+    );
+
+  if (error) throw error;
+  return String(signer.public_url) + "?v=" + Date.now();
+}
 
 async function imageToDataUrl(file: File, ratio: Ratio): Promise<string> {
   const objectUrl = URL.createObjectURL(file);
@@ -93,14 +128,17 @@ async function imageToDataUrl(file: File, ratio: Ratio): Promise<string> {
 
 export function PrimeHiggsMotion() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const [studioTab, setStudioTab] = useState<StudioTab>("settings");
   const [prompt, setPrompt] = useState("");
   const [ratio, setRatio] = useState<Ratio>("3:4");
-  const [resolution, setResolution] = useState<Resolution>("720p");
+  const [quality, setQuality] = useState<OutputQuality>("1080p");
   const [duration, setDuration] = useState(4);
   const [audio, setAudio] = useState(true);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioVolume, setAudioVolume] = useState(70);
   const [outputFormat, setOutputFormat] = useState<"MP4" | "MOV">("MP4");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -134,6 +172,27 @@ export function PrimeHiggsMotion() {
     setFile(null);
     setPreviewUrl("");
   };
+
+  const onAudioChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = event.target.files?.[0];
+    if (!next) return;
+
+    if (next.size > 50 * 1024 * 1024) {
+      setError("Soundtrack must be 50 MB or smaller.");
+      event.target.value = "";
+      return;
+    }
+
+    setAudioFile(next);
+    setAudio(true);
+    setError("");
+    event.target.value = "";
+  };
+
+  const removeAudio = () => {
+    setAudioFile(null);
+  };
+
 
   const cancelActiveJob = () => {
     abortRef.current?.abort();
@@ -195,11 +254,11 @@ export function PrimeHiggsMotion() {
           prompt:
             "STRICT SOURCE / ANATOMY LOCK: Use the uploaded image as the exact first frame. Preserve the exact person count and the exact visible body silhouette. Keep the same number of arms, hands, fingers, legs, and visible limbs as the source. Do not invent, reveal, duplicate, merge, or regenerate hidden limbs. Keep face, skin tone, facial structure, hair, clothing, jewelry, hands, pose, and body proportions unchanged. Keep the original person mostly still unless the user explicitly requests a small specific movement. Do not create a second copy of any body part. Preserve all flyer text and logos exactly.\n\nUSER MOTION PROMPT:\n" +
             prompt.trim() +
-            (audio ? "\n\nAudio: include matching cinematic ambience when the selected engine supports audio." : ""),
+            (audio && !audioFile ? "\n\nAudio: include matching cinematic ambience when the selected engine supports audio." : ""),
           image_data_url: imageDataUrl,
           mime_type: "image/jpeg",
           aspect_ratio: ratio,
-          resolution,
+          resolution: "720p",
           duration_seconds: Math.min(5, duration),
           output_format: outputFormat.toLowerCase(),
         }),
@@ -208,60 +267,55 @@ export function PrimeHiggsMotion() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok || !data?.output_url) {
-        const failures = Array.isArray(data?.failures)
-          ? data.failures.map((item: any) => ({
-              engine: String(item?.engine || "Unknown engine"),
-              category: String(item?.category || "provider_error"),
-              message: String(item?.message || "Unknown provider error"),
-            }))
-          : [];
-
-        const explanation = String(
-          data?.explanation ||
-            "The generation request failed before a usable video was returned.",
-        );
-        const errorMessage = String(
+        throw new Error(
           data?.error ||
             "The free video engines are busy right now. Try again shortly.",
         );
+      }
 
-        updateJob(jobId, {
-          status: "error",
-          progress: 0,
-          error: errorMessage,
-          explanation,
-          failures,
-        });
+      updateJob(jobId, { status: "generating", progress: 92 });
 
-        throw new Error(errorMessage);
+      let soundtrackUrl = "";
+      if (audio && audioFile) {
+        soundtrackUrl = await uploadSoundtrack(audioFile);
+        updateJob(jobId, { status: "generating", progress: 95 });
+      } else {
+        updateJob(jobId, { status: "generating", progress: 95 });
+      }
+
+      const upscaleResponse = await fetch("/api/upscale-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          source_url: String(data.output_url),
+          aspect_ratio: ratio,
+          quality,
+          audio_url: soundtrackUrl,
+          audio_volume: Math.max(0, Math.min(1, audioVolume / 100)),
+        }),
+      });
+
+      const upscaleData = await upscaleResponse.json().catch(() => ({}));
+      if (!upscaleResponse.ok || !upscaleData?.output_url) {
+        throw new Error(
+          upscaleData?.error ||
+            "The video generated, but the high-resolution export failed.",
+        );
       }
 
       updateJob(jobId, {
         status: "done",
         progress: 100,
-        outputUrl: String(data.output_url),
-        engine: String(data.engine || "Free AI") + " • native output",
+        outputUrl: String(upscaleData.output_url),
+        engine: String(data.engine || "Free AI") + " • " + quality + " export",
       });
     } catch (err) {
       if (controller.signal.aborted) {
         updateJob(jobId, { status: "cancelled", progress: 0, error: "Cancelled" });
       } else {
         const message = err instanceof Error ? err.message : String(err);
-        setJobs((current) =>
-          current.map((job) =>
-            job.id === jobId
-              ? {
-                  ...job,
-                  status: "error",
-                  progress: 0,
-                  error: job.error || message,
-                  explanation:
-                    job.explanation ||
-                    "The request did not complete. See the engine details below when available.",
-                }
-              : job,
-          ),
-        );
+        updateJob(jobId, { status: "error", progress: 0, error: message });
         setError(message);
       }
     } finally {
@@ -348,20 +402,20 @@ export function PrimeHiggsMotion() {
               </div>
 
               <div className="prime-setting-block">
-                <label>RESOLUTION</label>
+                <label>OUTPUT QUALITY</label>
                 <div className="prime-chip-row">
-                  {(["480p", "720p"] as Resolution[]).map((item) => (
+                  {(["1080p", "4K", "8K"] as OutputQuality[]).map((item) => (
                     <button
                       key={item}
-                      className={resolution === item ? "active" : ""}
-                      onClick={() => setResolution(item)}
+                      className={quality === item ? "active" : ""}
+                      onClick={() => setQuality(item)}
                     >
                       {item}
                     </button>
                   ))}
                 </div>
                 <div className="prime-output-dimensions">
-                  Stable direct model output • no FFmpeg post-processing
+                  {outputDimensions[quality][ratio]} • exact {ratio} export
                 </div>
               </div>
 
@@ -391,6 +445,57 @@ export function PrimeHiggsMotion() {
                   <span>{audio ? <Volume2 size={14} /> : <VolumeX size={14} />}</span>
                 </button>
               </div>
+
+              {audio && (
+                <div className="prime-setting-block prime-soundtrack-block">
+                  <div className="prime-setting-title-row">
+                    <label>SOUNDTRACK</label>
+                    {audioFile && (
+                      <button className="prime-audio-remove" type="button" onClick={removeAudio}>
+                        <X size={13} /> Remove
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    className="prime-audio-upload"
+                    type="button"
+                    onClick={() => audioInputRef.current?.click()}
+                  >
+                    <Music2 size={20} />
+                    <div>
+                      <b>{audioFile ? audioFile.name : "Add music / sound"}</b>
+                      <span>MP3, M4A, WAV, AAC or OGG • up to 50 MB</span>
+                    </div>
+                  </button>
+
+                  {audioFile && (
+                    <div className="prime-audio-volume">
+                      <div className="prime-setting-title-row">
+                        <label>VOLUME</label>
+                        <b>{audioVolume}%</b>
+                      </div>
+                      <input
+                        className="prime-duration"
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={audioVolume}
+                        onChange={(event) => setAudioVolume(Number(event.target.value))}
+                        style={{ "--progress": audioVolume + "%" } as React.CSSProperties}
+                      />
+                    </div>
+                  )}
+
+                  <input
+                    ref={audioInputRef}
+                    hidden
+                    type="file"
+                    accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg"
+                    onChange={onAudioChange}
+                  />
+                </div>
+              )}
 
               <div className="prime-setting-block prime-format-block">
                 <label>OUTPUT FORMAT</label>
@@ -461,8 +566,8 @@ export function PrimeHiggsMotion() {
 
         <div className="prime-server-status">
           {busy
-            ? "Stable direct generation is running — no high-resolution export stage."
-            : "Stable pipeline restored: AI result is returned directly with no FFmpeg/upscale post-processing."}
+            ? "Server proxy is generating — Safari stays connected to this site only."
+            : "Server proxy ready — no direct Hugging Face browser connection."}
         </div>
 
         {error && <div className="prime-error">{error}</div>}
@@ -509,28 +614,7 @@ export function PrimeHiggsMotion() {
                   )}
 
                   {job.status === "error" && job.error && (
-                    <div className="prime-job-error-details">
-                      <p className="prime-job-error">{job.error}</p>
-                      {job.explanation && (
-                        <div className="prime-error-explanation">
-                          <b>WHY THIS FAILED</b>
-                          <span>{job.explanation}</span>
-                        </div>
-                      )}
-                      {job.failures && job.failures.length > 0 && (
-                        <div className="prime-engine-failures">
-                          {job.failures.map((failure, index) => (
-                            <div key={failure.engine + index} className="prime-engine-failure">
-                              <div>
-                                <b>{failure.engine}</b>
-                                <span>{failure.category.replaceAll("_", " ")}</span>
-                              </div>
-                              <p>{failure.message}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <p className="prime-job-error">{job.error}</p>
                   )}
                 </article>
               ))}

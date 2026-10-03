@@ -60,31 +60,35 @@ async function imageToDataUrl(file: File, ratio: Ratio): Promise<string> {
     });
 
     const targetRatio = ratio === "1:1" ? 1 : ratio === "3:4" ? 3 / 4 : 9 / 16;
-    const sourceRatio = image.naturalWidth / image.naturalHeight;
-
-    let sx = 0;
-    let sy = 0;
-    let sw = image.naturalWidth;
-    let sh = image.naturalHeight;
-
-    if (sourceRatio > targetRatio) {
-      sw = image.naturalHeight * targetRatio;
-      sx = (image.naturalWidth - sw) / 2;
-    } else if (sourceRatio < targetRatio) {
-      sh = image.naturalWidth / targetRatio;
-      sy = (image.naturalHeight - sh) / 2;
-    }
-
     const maxSide = 1600;
-    const scale = Math.min(1, maxSide / Math.max(sw, sh));
+
+    // Build the requested output canvas, then fit the ENTIRE source image inside it.
+    // Never center-crop the uploaded flyer.
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(2, Math.round(sw * scale / 2) * 2);
-    canvas.height = Math.max(2, Math.round(sh * scale / 2) * 2);
+    if (targetRatio >= 1) {
+      canvas.width = maxSide;
+      canvas.height = Math.max(2, Math.round((maxSide / targetRatio) / 2) * 2);
+    } else {
+      canvas.height = maxSide;
+      canvas.width = Math.max(2, Math.round((maxSide * targetRatio) / 2) * 2);
+    }
 
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Could not prepare the image.");
 
-    context.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#000000";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    const containScale = Math.min(
+      canvas.width / image.naturalWidth,
+      canvas.height / image.naturalHeight,
+    );
+    const drawWidth = image.naturalWidth * containScale;
+    const drawHeight = image.naturalHeight * containScale;
+    const dx = (canvas.width - drawWidth) / 2;
+    const dy = (canvas.height - drawHeight) / 2;
+
+    context.drawImage(image, dx, dy, drawWidth, drawHeight);
     return canvas.toDataURL("image/jpeg", 0.96);
   } finally {
     URL.revokeObjectURL(objectUrl);
@@ -193,7 +197,7 @@ export function PrimeHiggsMotion() {
         signal: controller.signal,
         body: JSON.stringify({
           prompt:
-            "STRICT SOURCE / ANATOMY LOCK: Use the uploaded image as the exact first frame. Preserve the exact person count and the exact visible body silhouette. Keep the same number of arms, hands, fingers, legs, and visible limbs as the source. Do not invent, reveal, duplicate, merge, or regenerate hidden limbs. Keep face, skin tone, facial structure, hair, clothing, jewelry, hands, pose, and body proportions unchanged. Keep the original person mostly still unless the user explicitly requests a small specific movement. Do not create a second copy of any body part. Preserve all flyer text and logos exactly.\n\nUSER MOTION PROMPT:\n" +
+            "STRICT SOURCE / ANATOMY LOCK: Use the uploaded image as the exact first frame. FULL-FRAME LOCK: preserve the complete source canvas and keep all four outer edges visible from start to finish. Do not zoom in, center-crop, pan, punch in, reframe, or cut off any border, headline, date, logo, footer, address, or text. Preserve the exact person count and the exact visible body silhouette. Keep the same number of arms, hands, fingers, legs, and visible limbs as the source. Do not invent, reveal, duplicate, merge, or regenerate hidden limbs. Keep face, skin tone, facial structure, hair, clothing, jewelry, hands, pose, and body proportions unchanged. Keep the original person mostly still unless the user explicitly requests a small specific movement. Do not create a second copy of any body part. Preserve all flyer text and logos exactly.\n\nUSER MOTION PROMPT:\n" +
             prompt.trim() +
             (audio ? "\n\nAudio: include matching cinematic ambience when the selected engine supports audio." : ""),
           image_data_url: imageDataUrl,

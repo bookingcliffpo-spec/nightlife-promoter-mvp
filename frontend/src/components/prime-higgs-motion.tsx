@@ -30,125 +30,38 @@ type StudioJob = {
   progress: number;
   createdAt: number;
   outputUrl?: string;
+  engine?: string;
   error?: string;
 };
 
-const LTX_SPACE_ID = "Lightricks/ltx-video-distilled";
-const LTX_SPACE_ORIGIN = "https://lightricks-ltx-video-distilled.hf.space";
-const WAN22_SPACE_ID = "zerogpu-aoti/wan2-2-fp8da-aoti-faster";
-const WAN22_SPACE_ORIGIN = "https://zerogpu-aoti-wan2-2-fp8da-aoti-faster.hf.space";
-const WAN21_SPACE_ID = "Wan-AI/Wan2.1";
-const GRADIO_CDN = "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
-const NEGATIVE_PROMPT =
-  "worst quality, low quality, inconsistent motion, blurry, jittery, distorted, warped face, face morphing, extra fingers, extra limbs, duplicate person, misspelled text, moving text, disappearing logo, plastic skin, HDR, AI sharpening, lens flare, sparks, dust, graffiti, grunge";
+const VIDEO_PROXY_URL =
+  "https://ntmunryoutmjqdxgmzpw.supabase.co/functions/v1/video-generate-proxy";
 
 const ratios: Ratio[] = ["16:9", "9:16", "1:1", "4:3", "3:2", "21:9"];
 
-const dimensions: Record<Resolution, Record<Ratio, { width: number; height: number }>> = {
-  "480p": {
-    "16:9": { width: 832, height: 480 },
-    "9:16": { width: 480, height: 832 },
-    "1:1": { width: 512, height: 512 },
-    "4:3": { width: 640, height: 480 },
-    "3:2": { width: 736, height: 480 },
-    "21:9": { width: 1056, height: 448 },
-  },
-  "720p": {
-    "16:9": { width: 1280, height: 704 },
-    "9:16": { width: 704, height: 1280 },
-    "1:1": { width: 768, height: 768 },
-    "4:3": { width: 960, height: 704 },
-    "3:2": { width: 1056, height: 704 },
-    "21:9": { width: 1536, height: 672 },
-  },
-};
-
-function normalizeSpaceUrl(value: string, origin = "") {
-  if (!value) return "";
-  if (/^https?:\/\//i.test(value)) return value;
-  if (value.startsWith("/") && origin) return origin + value;
-  return value;
-}
-
-function extractVideoUrl(data: unknown, origin = ""): string {
-  const seen = new Set<unknown>();
-
-  const walk = (node: unknown): string => {
-    if (!node || seen.has(node)) return "";
-    if (typeof node === "string") {
-      if (/^https?:\/\//i.test(node)) return node;
-      if (/\.(mp4|webm|mov)(\?|$)/i.test(node)) return normalizeSpaceUrl(node, origin);
-      return "";
-    }
-    if (typeof node !== "object") return "";
-    seen.add(node);
-
-    if (Array.isArray(node)) {
-      for (const item of node) {
-        const found = walk(item);
-        if (found) return found;
-      }
-      return "";
-    }
-
-    const record = node as Record<string, unknown>;
-    if (typeof record.url === "string") return normalizeSpaceUrl(record.url, origin);
-    if (typeof record.path === "string" && /\.(mp4|webm|mov)(\?|$)/i.test(record.path)) {
-      return normalizeSpaceUrl(record.path, origin);
-    }
-
-    for (const key of ["video", "value", "data", "output"]) {
-      if (record[key]) {
-        const found = walk(record[key]);
-        if (found) return found;
-      }
-    }
-
-    for (const value of Object.values(record)) {
-      const found = walk(value);
-      if (found) return found;
-    }
-    return "";
-  };
-
-  return walk(data);
-}
-
-async function dynamicGradio() {
-  const importer = new Function("url", "return import(url)") as (url: string) => Promise<any>;
-  return importer(GRADIO_CDN);
-}
-
-async function browserFriendlyImage(file: File): Promise<File | Blob> {
-  const type = (file.type || "").toLowerCase();
-  if (["image/jpeg", "image/png", "image/webp"].includes(type)) return file;
-
+async function imageToDataUrl(file: File): Promise<string> {
   const objectUrl = URL.createObjectURL(file);
+
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error("This image format could not be opened. Try JPG, PNG, or WebP."));
-      el.src = objectUrl;
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () =>
+        reject(new Error("Could not prepare this image. Try JPG, PNG, WebP, or a different HEIC photo."));
+      element.src = objectUrl;
     });
 
-    const maxSide = 1800;
+    const maxSide = 1400;
     const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Could not prepare the uploaded image.");
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not prepare the image.");
 
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (blob) => (blob ? resolve(blob) : reject(new Error("Could not convert the uploaded image."))),
-        "image/jpeg",
-        0.95
-      );
-    });
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.9);
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -156,8 +69,7 @@ async function browserFriendlyImage(file: File): Promise<File | Blob> {
 
 export function PrimeHiggsMotion() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const submissionRef = useRef<any>(null);
-  const cancelledRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const [studioTab, setStudioTab] = useState<StudioTab>("settings");
   const [prompt, setPrompt] = useState("");
@@ -174,16 +86,18 @@ export function PrimeHiggsMotion() {
   const activeJob = jobs.find((job) => job.status === "queued" || job.status === "generating");
   const busy = Boolean(activeJob);
   const subtitle = file ? "Image → Video" : "Text → Video";
-
   const currentMediaLabel = useMemo(() => file?.name || "No media attached", [file]);
 
   const updateJob = (id: string, patch: Partial<StudioJob>) => {
-    setJobs((current) => current.map((job) => (job.id === id ? { ...job, ...patch } : job)));
+    setJobs((current) =>
+      current.map((job) => (job.id === id ? { ...job, ...patch } : job)),
+    );
   };
 
   const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.files?.[0];
     if (!next) return;
+
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(next);
     setPreviewUrl(URL.createObjectURL(next));
@@ -198,12 +112,16 @@ export function PrimeHiggsMotion() {
   };
 
   const cancelActiveJob = () => {
-    cancelledRef.current = true;
-    try {
-      submissionRef.current?.cancel?.();
-    } catch {}
-    submissionRef.current = null;
-    if (activeJob) updateJob(activeJob.id, { status: "cancelled", progress: 0, error: "Cancelled" });
+    abortRef.current?.abort();
+    abortRef.current = null;
+
+    if (activeJob) {
+      updateJob(activeJob.id, {
+        status: "cancelled",
+        progress: 0,
+        error: "Cancelled",
+      });
+    }
   };
 
   const generate = async () => {
@@ -212,197 +130,80 @@ export function PrimeHiggsMotion() {
       return;
     }
 
+    if (!file) {
+      setError("Upload a reference image first. The free backend currently supports image-to-video.");
+      setStudioTab("upload");
+      return;
+    }
+
     const jobId = crypto.randomUUID();
-    const job: StudioJob = {
+    const newJob: StudioJob = {
       id: jobId,
       prompt: prompt.trim(),
       status: "queued",
-      progress: 2,
+      progress: 3,
       createdAt: Date.now(),
     };
 
-    setJobs((current) => [job, ...current].slice(0, 8));
+    setJobs((current) => [newJob, ...current].slice(0, 8));
     setError("");
-    cancelledRef.current = false;
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    let progressTimer: ReturnType<typeof setInterval> | null = null;
 
     try {
-      const { Client, handle_file } = await dynamicGradio();
-      const prepared = file ? await browserFriendlyImage(file) : null;
-      const dims = dimensions[resolution][ratio];
+      updateJob(jobId, { status: "generating", progress: 8 });
+      const imageDataUrl = await imageToDataUrl(file);
 
-      const runLtx = async () => {
-        updateJob(jobId, { status: "queued", progress: 7 });
-        const client = await Client.connect(LTX_SPACE_ID, { events: ["status", "data"] });
-        const submission = client.submit("/image_to_video", {
-          prompt: prompt.trim(),
-          negative_prompt: NEGATIVE_PROMPT,
-          input_image_filepath: prepared ? handle_file(prepared) : null,
-          input_video_filepath: null,
-          height_ui: dims.height,
-          width_ui: dims.width,
-          mode: prepared ? "image-to-video" : "text-to-video",
-          duration_ui: Math.min(8.5, Number(duration)),
-          ui_frames_to_use: 9,
-          seed_ui: 42,
-          randomize_seed: true,
-          ui_guidance_scale: 1,
-          improve_texture_flag: true,
-        });
+      let fakeProgress = 12;
+      progressTimer = setInterval(() => {
+        fakeProgress = Math.min(92, fakeProgress + (fakeProgress < 55 ? 3 : 1));
+        updateJob(jobId, { status: "generating", progress: fakeProgress });
+      }, 3000);
 
-        submissionRef.current = submission;
-        let found = "";
+      const response = await fetch(VIDEO_PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          prompt: prompt.trim() + (audio ? "\nAudio: include matching cinematic ambience when the selected engine supports audio." : ""),
+          image_data_url: imageDataUrl,
+          mime_type: "image/jpeg",
+          aspect_ratio: ratio,
+          resolution,
+          duration_seconds: Math.min(5, duration),
+          output_format: outputFormat.toLowerCase(),
+        }),
+      });
 
-        for await (const msg of submission) {
-          if (cancelledRef.current) throw new Error("Generation cancelled.");
+      const data = await response.json().catch(() => ({}));
 
-          if (msg.type === "status") {
-            const stage = String(msg.stage || "");
-            if (stage === "pending") {
-              updateJob(jobId, { status: "queued", progress: 12 });
-            } else if (stage === "generating") {
-              const entries = Array.isArray(msg.progress_data) ? msg.progress_data : [];
-              const raw = entries.length ? Number(entries[entries.length - 1]?.progress) : NaN;
-              const next = Number.isFinite(raw)
-                ? 20 + Math.round(Math.max(0, Math.min(1, raw)) * 65)
-                : 45;
-              updateJob(jobId, { status: "generating", progress: Math.min(90, next) });
-            } else if (stage === "error") {
-              throw new Error(String(msg.message || "LTX generation failed."));
-            }
-          }
-
-          if (msg.type === "data") {
-            const url = extractVideoUrl(msg.data, LTX_SPACE_ORIGIN);
-            if (url) found = url;
-          }
-        }
-
-        if (!found) throw new Error("LTX finished without returning a video.");
-        return found;
-      };
-
-      const runWan22 = async () => {
-        if (!prepared) throw new Error("Wan 2.2 fallback needs an uploaded image.");
-
-        updateJob(jobId, { status: "queued", progress: 10 });
-        const client = await Client.connect(WAN22_SPACE_ID, { events: ["status", "data"] });
-        const submission = client.submit("/generate_video", {
-          input_image: handle_file(prepared),
-          prompt: prompt.trim(),
-          steps: 4,
-          negative_prompt: NEGATIVE_PROMPT,
-          duration_seconds: Math.min(5, Number(duration)),
-          guidance_scale: 1,
-          guidance_scale_2: 1,
-          seed: 42,
-          randomize_seed: true,
-        });
-
-        submissionRef.current = submission;
-        let found = "";
-
-        for await (const msg of submission) {
-          if (cancelledRef.current) throw new Error("Generation cancelled.");
-
-          if (msg.type === "status") {
-            const stage = String(msg.stage || "");
-            if (stage === "pending") {
-              updateJob(jobId, { status: "queued", progress: 15 });
-            } else if (stage === "generating") {
-              const entries = Array.isArray(msg.progress_data) ? msg.progress_data : [];
-              const raw = entries.length ? Number(entries[entries.length - 1]?.progress) : NaN;
-              const next = Number.isFinite(raw)
-                ? 25 + Math.round(Math.max(0, Math.min(1, raw)) * 65)
-                : 52;
-              updateJob(jobId, { status: "generating", progress: Math.min(92, next) });
-            } else if (stage === "error") {
-              throw new Error(String(msg.message || "Wan 2.2 generation failed."));
-            }
-          }
-
-          if (msg.type === "data") {
-            const url = extractVideoUrl(msg.data, WAN22_SPACE_ORIGIN);
-            if (url) found = url;
-          }
-        }
-
-        if (!found) throw new Error("Wan 2.2 finished without returning a video.");
-        return found;
-      };
-
-      const runWan21 = async () => {
-        if (!prepared) throw new Error("Wan public fallback needs an uploaded image.");
-
-        updateJob(jobId, { status: "queued", progress: 12 });
-        const client = await Client.connect(WAN21_SPACE_ID);
-        await client.predict("/i2v_generation_async", {
-          prompt: prompt.trim(),
-          image: handle_file(prepared),
-          watermark_wan: false,
-          seed: -1,
-        });
-
-        for (let attempt = 0; attempt < 60; attempt++) {
-          if (cancelledRef.current) throw new Error("Generation cancelled.");
-          await new Promise((resolve) => setTimeout(resolve, 4000));
-
-          const poll = await client.predict("/status_refresh_1", {});
-          const url = extractVideoUrl(poll.data);
-          if (url) return url;
-
-          updateJob(jobId, { status: "generating", progress: Math.min(95, 24 + attempt) });
-        }
-
-        throw new Error("The public Wan service is still busy.");
-      };
-
-      let output = "";
-      const failures: string[] = [];
-
-      try {
-        output = await runLtx();
-      } catch (err) {
-        failures.push(err instanceof Error ? err.message : String(err));
-      }
-
-      if (!output && prepared && !cancelledRef.current) {
-        try {
-          output = await runWan22();
-        } catch (err) {
-          failures.push(err instanceof Error ? err.message : String(err));
-        }
-      }
-
-      if (!output && prepared && !cancelledRef.current) {
-        try {
-          output = await runWan21();
-        } catch (err) {
-          failures.push(err instanceof Error ? err.message : String(err));
-        }
-      }
-
-      submissionRef.current = null;
-
-      if (cancelledRef.current) {
-        updateJob(jobId, { status: "cancelled", progress: 0, error: "Cancelled" });
-        return;
-      }
-
-      if (!output) {
+      if (!response.ok || !data?.output_url) {
         throw new Error(
-          failures[failures.length - 1] ||
-            (prepared
-              ? "No free engine returned a video."
-              : "Text-only generation is temporarily unavailable. Attach an image and try again.")
+          data?.error ||
+            "The free video engines are busy right now. Try again shortly.",
         );
       }
 
-      updateJob(jobId, { status: "done", progress: 100, outputUrl: output });
+      updateJob(jobId, {
+        status: "done",
+        progress: 100,
+        outputUrl: String(data.output_url),
+        engine: String(data.engine || "Free AI"),
+      });
     } catch (err) {
-      submissionRef.current = null;
-      const message = err instanceof Error ? err.message : String(err);
-      updateJob(jobId, { status: "error", progress: 0, error: message });
-      setError(message);
+      if (controller.signal.aborted) {
+        updateJob(jobId, { status: "cancelled", progress: 0, error: "Cancelled" });
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        updateJob(jobId, { status: "error", progress: 0, error: message });
+        setError(message);
+      }
+    } finally {
+      if (progressTimer) clearInterval(progressTimer);
+      if (abortRef.current === controller) abortRef.current = null;
     }
   };
 
@@ -445,13 +246,22 @@ export function PrimeHiggsMotion() {
         </div>
 
         <div className="prime-toolbar">
-          <button className={studioTab === "settings" ? "active" : ""} onClick={() => setStudioTab("settings")}>
+          <button
+            className={studioTab === "settings" ? "active" : ""}
+            onClick={() => setStudioTab("settings")}
+          >
             <SlidersHorizontal size={17} /> Settings
           </button>
-          <button className={studioTab === "media" ? "active" : ""} onClick={() => setStudioTab("media")}>
+          <button
+            className={studioTab === "media" ? "active" : ""}
+            onClick={() => setStudioTab("media")}
+          >
             <Paperclip size={18} /> Media
           </button>
-          <button className={studioTab === "upload" ? "active" : ""} onClick={() => setStudioTab("upload")}>
+          <button
+            className={studioTab === "upload" ? "active" : ""}
+            onClick={() => setStudioTab("upload")}
+          >
             <Upload size={18} /> Upload
           </button>
         </div>
@@ -463,7 +273,11 @@ export function PrimeHiggsMotion() {
                 <label>ASPECT RATIO</label>
                 <div className="prime-chip-row">
                   {ratios.map((item) => (
-                    <button key={item} className={ratio === item ? "active" : ""} onClick={() => setRatio(item)}>
+                    <button
+                      key={item}
+                      className={ratio === item ? "active" : ""}
+                      onClick={() => setRatio(item)}
+                    >
                       {item}
                     </button>
                   ))}
@@ -474,7 +288,11 @@ export function PrimeHiggsMotion() {
                 <label>RESOLUTION</label>
                 <div className="prime-chip-row">
                   {(["480p", "720p"] as Resolution[]).map((item) => (
-                    <button key={item} className={resolution === item ? "active" : ""} onClick={() => setResolution(item)}>
+                    <button
+                      key={item}
+                      className={resolution === item ? "active" : ""}
+                      onClick={() => setResolution(item)}
+                    >
                       {item}
                     </button>
                   ))}
@@ -500,7 +318,10 @@ export function PrimeHiggsMotion() {
 
               <div className="prime-inline-setting">
                 <label>AUDIO</label>
-                <button className={audio ? "prime-toggle on" : "prime-toggle"} onClick={() => setAudio((value) => !value)}>
+                <button
+                  className={audio ? "prime-toggle on" : "prime-toggle"}
+                  onClick={() => setAudio((value) => !value)}
+                >
                   <span>{audio ? <Volume2 size={14} /> : <VolumeX size={14} />}</span>
                 </button>
               </div>
@@ -509,7 +330,11 @@ export function PrimeHiggsMotion() {
                 <label>OUTPUT FORMAT</label>
                 <div className="prime-chip-row">
                   {(["MP4", "MOV"] as const).map((item) => (
-                    <button key={item} className={outputFormat === item ? "active" : ""} onClick={() => setOutputFormat(item)}>
+                    <button
+                      key={item}
+                      className={outputFormat === item ? "active" : ""}
+                      onClick={() => setOutputFormat(item)}
+                    >
                       {item}
                     </button>
                   ))}
@@ -551,7 +376,13 @@ export function PrimeHiggsMotion() {
             </button>
           )}
 
-          <input ref={fileInputRef} hidden type="file" accept="image/*" onChange={onFileChange} />
+          <input
+            ref={fileInputRef}
+            hidden
+            type="file"
+            accept="image/*"
+            onChange={onFileChange}
+          />
         </section>
 
         <div className="prime-generate-row">
@@ -563,8 +394,9 @@ export function PrimeHiggsMotion() {
         </div>
 
         <div className="prime-server-status">
-          {busy ? "Generation running — free engine fallback enabled." : "Free multi-engine backend ready."}
-          {audio ? " Audio instructions are included when supported." : ""}
+          {busy
+            ? "Server proxy is generating — Safari stays connected to this site only."
+            : "Server proxy ready — no direct Hugging Face browser connection."}
         </div>
 
         {error && <div className="prime-error">{error}</div>}
@@ -593,26 +425,37 @@ export function PrimeHiggsMotion() {
                   </div>
 
                   {(job.status === "queued" || job.status === "generating") && (
-                    <div className="prime-job-progress"><div style={{ width: job.progress + "%" }} /></div>
+                    <div className="prime-job-progress">
+                      <div style={{ width: job.progress + "%" }} />
+                    </div>
                   )}
 
                   {job.status === "done" && job.outputUrl && (
                     <div className="prime-job-result">
                       <video src={job.outputUrl} controls playsInline />
-                      <a href={job.outputUrl} target="_blank" rel="noreferrer">
-                        <Download size={15} /> Open video
-                      </a>
+                      <div>
+                        <b>{job.engine || "Free AI"}</b>
+                        <a href={job.outputUrl} target="_blank" rel="noreferrer">
+                          <Download size={15} /> Open video
+                        </a>
+                      </div>
                     </div>
                   )}
 
-                  {job.status === "error" && job.error && <p className="prime-job-error">{job.error}</p>}
+                  {job.status === "error" && job.error && (
+                    <p className="prime-job-error">{job.error}</p>
+                  )}
                 </article>
               ))}
             </div>
           )}
         </section>
 
-        {activeJob && <button className="prime-cancel" onClick={cancelActiveJob}>Cancel active job</button>}
+        {activeJob && (
+          <button className="prime-cancel" onClick={cancelActiveJob}>
+            Cancel active job
+          </button>
+        )}
       </section>
     </main>
   );

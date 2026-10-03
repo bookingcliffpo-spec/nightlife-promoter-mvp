@@ -1,5 +1,5 @@
 name: One-Time Portrait Export Smoke Test
-# rerun after ffmpeg tracing fix
+# rerun after ffmpeg runtime path fix
 
 on:
   push:

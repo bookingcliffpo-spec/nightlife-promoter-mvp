@@ -611,7 +611,7 @@ export function PrimeHiggsMotion() {
         <div className="prime-server-status">
           {busy
             ? "Server proxy is generating — Safari stays connected to this site only."
-            : "Server proxy ready — no direct Hugging Face browser connection."}
+            : "Prompt text is not keyword-filtered by this site. Upstream model providers may still enforce their own safety rules."}
         </div>
 
         {error && <div className="prime-error">{error}</div>}

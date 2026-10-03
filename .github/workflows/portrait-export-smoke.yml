@@ -28,12 +28,14 @@ jobs:
           curl -fL --max-time 30 "$SOURCE" -o /tmp/source.mp4
           test -s /tmp/source.mp4
 
-          RESPONSE=$(curl -fsS --max-time 300 \
+          RESPONSE=$(curl -sS --max-time 300 \
+            -w '\nHTTP_STATUS:%{http_code}\n' \
             -X POST https://nightlife-promoter-mvp.vercel.app/api/upscale-video \
             -H 'Content-Type: application/json' \
             --data '{"source_url":"https://huggingface.co/spaces/mindmime/gradio/resolve/main/demo/video_component/files/world.mp4","aspect_ratio":"3:4","quality":"1080p"}')
 
           echo "$RESPONSE"
+          echo "$RESPONSE" | grep -q 'HTTP_STATUS:200'
           echo "$RESPONSE" | grep -q '"ok":true'
           echo "$RESPONSE" | grep -q '"width":1080'
           echo "$RESPONSE" | grep -q '"height":1440'

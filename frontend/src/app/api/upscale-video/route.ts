@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import ffmpegPath from "ffmpeg-static";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -37,6 +37,28 @@ const DIMENSIONS: Record<Quality, Record<Ratio, { width: number; height: number 
     "9:16": { width: 4320, height: 7680 },
   },
 };
+
+async function resolveFfmpegPath() {
+  const candidates = [
+    join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg"),
+    join(process.cwd(), ".next", "server", "app", "api", "upscale-video", "ffmpeg"),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      await chmod(candidate, 0o755).catch(() => undefined);
+      await access(candidate, fsConstants.X_OK);
+      return candidate;
+    } catch {
+      // Try the next traced path.
+    }
+  }
+
+  throw new Error(
+    "FFmpeg binary is missing from the Vercel function bundle. Checked: " +
+      candidates.join(", "),
+  );
+}
 
 function isAllowedSource(url: URL) {
   const host = url.hostname.toLowerCase();
@@ -70,9 +92,7 @@ export async function POST(request: NextRequest) {
     if (parsed.protocol !== "https:" || !isAllowedSource(parsed)) {
       return NextResponse.json({ error: "Unsupported source URL." }, { status: 400 });
     }
-    if (!ffmpegPath) {
-      throw new Error("FFmpeg is unavailable on this deployment.");
-    }
+    const ffmpegPath = await resolveFfmpegPath();
 
     const source = await fetch(parsed, { cache: "no-store" });
     if (!source.ok) {

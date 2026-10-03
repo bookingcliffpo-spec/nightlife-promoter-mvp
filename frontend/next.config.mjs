@@ -11,7 +11,7 @@ const nextConfig = {
   },
   outputFileTracingIncludes: {
     '/api/upscale-video': [
-      './node_modules/ffmpeg-static/ffmpeg'
+      './node_modules/ffmpeg-static/**/*'
     ]
   }
 };

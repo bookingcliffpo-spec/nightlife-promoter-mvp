@@ -78,6 +78,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const sourceUrl = String(body.source_url || "");
+    const audioUrl = String(body.audio_url || "");
+    const audioVolume = Math.max(0, Math.min(1, Number(body.audio_volume ?? 0.7)));
     const ratio = String(body.aspect_ratio || "3:4") as Ratio;
     const quality = String(body.quality || "1080p") as Quality;
 
@@ -92,6 +94,15 @@ export async function POST(request: NextRequest) {
     if (parsed.protocol !== "https:" || !isAllowedSource(parsed)) {
       return NextResponse.json({ error: "Unsupported source URL." }, { status: 400 });
     }
+
+    let parsedAudio: URL | null = null;
+    if (audioUrl) {
+      parsedAudio = new URL(audioUrl);
+      if (parsedAudio.protocol !== "https:" || !isAllowedSource(parsedAudio)) {
+        return NextResponse.json({ error: "Unsupported audio URL." }, { status: 400 });
+      }
+    }
+
     const ffmpegPath = await resolveFfmpegPath();
 
     const source = await fetch(parsed, { cache: "no-store" });
@@ -112,7 +123,27 @@ export async function POST(request: NextRequest) {
     workDir = await mkdtemp(join(tmpdir(), "cliff-video-"));
     const inputPath = join(workDir, "input.mp4");
     const outputPath = join(workDir, "output.mp4");
+    const audioPath = join(workDir, "soundtrack");
     await writeFile(inputPath, inputBuffer);
+
+    if (parsedAudio) {
+      const audioResponse = await fetch(parsedAudio, { cache: "no-store" });
+      if (!audioResponse.ok) {
+        throw new Error("Could not download the soundtrack.");
+      }
+
+      const audioLength = Number(audioResponse.headers.get("content-length") || 0);
+      if (audioLength > 50 * 1024 * 1024) {
+        throw new Error("Soundtrack is too large.");
+      }
+
+      const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+      if (audioBuffer.byteLength > 50 * 1024 * 1024) {
+        throw new Error("Soundtrack is too large.");
+      }
+
+      await writeFile(audioPath, audioBuffer);
+    }
 
     const { width, height } = DIMENSIONS[quality][ratio];
     const preset = quality === "8K" ? "ultrafast" : quality === "4K" ? "veryfast" : "faster";
@@ -122,33 +153,53 @@ export async function POST(request: NextRequest) {
       `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,` +
       `crop=${width}:${height},setsar=1`;
 
+    const ffmpegArgs = [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      inputPath,
+    ];
+
+    if (parsedAudio) {
+      ffmpegArgs.push("-stream_loop", "-1", "-i", audioPath);
+    }
+
+    ffmpegArgs.push(
+      "-map",
+      "0:v:0",
+      ...(parsedAudio ? ["-map", "1:a:0"] : ["-map", "0:a?"]),
+      "-vf",
+      filter,
+      "-c:v",
+      "libx264",
+      "-preset",
+      preset,
+      "-crf",
+      crf,
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "192k",
+    );
+
+    if (parsedAudio) {
+      ffmpegArgs.push(
+        "-filter:a",
+        `volume=${audioVolume.toFixed(3)},afade=t=in:st=0:d=0.25`,
+        "-shortest",
+      );
+    }
+
+    ffmpegArgs.push("-y", outputPath);
+
     await execFileAsync(
       ffmpegPath,
-      [
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-i",
-        inputPath,
-        "-vf",
-        filter,
-        "-c:v",
-        "libx264",
-        "-preset",
-        preset,
-        "-crf",
-        crf,
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
-        "-y",
-        outputPath,
-      ],
+      ffmpegArgs,
       {
         timeout: quality === "8K" ? 280_000 : 180_000,
         maxBuffer: 8 * 1024 * 1024,
@@ -192,6 +243,8 @@ export async function POST(request: NextRequest) {
       quality,
       aspect_ratio: ratio,
       upscale: quality !== "1080p",
+      soundtrack: Boolean(parsedAudio),
+      audio_volume: parsedAudio ? audioVolume : null,
     });
   } catch (error) {
     console.error("upscale-video failed", error);

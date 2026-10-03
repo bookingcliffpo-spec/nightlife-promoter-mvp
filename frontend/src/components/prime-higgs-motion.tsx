@@ -298,10 +298,24 @@ export function PrimeHiggsMotion() {
 
       const upscaleData = await upscaleResponse.json().catch(() => ({}));
       if (!upscaleResponse.ok || !upscaleData?.output_url) {
-        throw new Error(
+        const exportError = String(
           upscaleData?.error ||
-            "The video generated, but the high-resolution export failed.",
+            "The high-resolution export failed after the AI video was generated."
         );
+
+        updateJob(jobId, {
+          status: "done",
+          progress: 100,
+          outputUrl: String(data.output_url),
+          engine: String(data.engine || "Free AI") + " • original render",
+          error: "High-resolution export failed: " + exportError,
+        });
+        setError(
+          "The AI video finished, but the high-resolution export failed. " +
+            exportError +
+            " The original generated video is still available below."
+        );
+        return;
       }
 
       updateJob(jobId, {

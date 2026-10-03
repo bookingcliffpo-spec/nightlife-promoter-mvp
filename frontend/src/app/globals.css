@@ -875,3 +875,28 @@ body{overflow-x:hidden}
 .prime-output-dimensions{
   margin-top:10px;color:#7f7e88;font-size:11px;font-weight:800;letter-spacing:.03em;
 }
+
+.prime-soundtrack-block{
+  padding-top:2px;
+}
+.prime-audio-upload{
+  width:100%;min-height:72px;display:flex;align-items:center;gap:12px;
+  padding:12px 14px;border:1px dashed #3b3b43;border-radius:13px;
+  background:#0d0d11;color:#d9d9df;text-align:left;
+}
+.prime-audio-upload>svg{flex:0 0 auto;color:var(--prime-lime)}
+.prime-audio-upload div{min-width:0}
+.prime-audio-upload b{
+  display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:12px;
+}
+.prime-audio-upload span{
+  display:block;margin-top:5px;color:#74737d;font-size:10px;
+}
+.prime-audio-remove{
+  display:flex;align-items:center;gap:5px;padding:6px 8px;
+  border:1px solid #433038;border-radius:8px;background:#211519;color:#e0a5af;
+  font-size:10px;font-weight:800;
+}
+.prime-audio-volume{margin-top:16px}
+.prime-audio-volume .prime-setting-title-row label{margin:0}

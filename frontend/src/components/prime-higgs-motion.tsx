@@ -25,6 +25,12 @@ type OutputQuality = "1080p" | "4K" | "8K";
 type StudioTab = "settings" | "media" | "upload";
 type JobStatus = "queued" | "generating" | "done" | "error" | "cancelled";
 
+type GenerationFailure = {
+  engine: string;
+  category: string;
+  message: string;
+};
+
 type StudioJob = {
   id: string;
   prompt: string;
@@ -34,6 +40,8 @@ type StudioJob = {
   outputUrl?: string;
   engine?: string;
   error?: string;
+  explanation?: string;
+  failures?: GenerationFailure[];
 };
 
 const SUPABASE_URL = "https://ntmunryoutmjqdxgmzpw.supabase.co";
@@ -267,10 +275,32 @@ export function PrimeHiggsMotion() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok || !data?.output_url) {
-        throw new Error(
+        const failures = Array.isArray(data?.failures)
+          ? data.failures.map((item: any) => ({
+              engine: String(item?.engine || "Unknown engine"),
+              category: String(item?.category || "provider_error"),
+              message: String(item?.message || "Unknown provider error"),
+            }))
+          : [];
+
+        const explanation = String(
+          data?.explanation ||
+            "The generation request failed before a usable video was returned.",
+        );
+        const errorMessage = String(
           data?.error ||
             "The free video engines are busy right now. Try again shortly.",
         );
+
+        updateJob(jobId, {
+          status: "error",
+          progress: 0,
+          error: errorMessage,
+          explanation,
+          failures,
+        });
+
+        throw new Error(errorMessage);
       }
 
       updateJob(jobId, { status: "generating", progress: 92 });
@@ -315,7 +345,21 @@ export function PrimeHiggsMotion() {
         updateJob(jobId, { status: "cancelled", progress: 0, error: "Cancelled" });
       } else {
         const message = err instanceof Error ? err.message : String(err);
-        updateJob(jobId, { status: "error", progress: 0, error: message });
+        setJobs((current) =>
+          current.map((job) =>
+            job.id === jobId
+              ? {
+                  ...job,
+                  status: "error",
+                  progress: 0,
+                  error: job.error || message,
+                  explanation:
+                    job.explanation ||
+                    "The request did not complete. See the engine details below when available.",
+                }
+              : job,
+          ),
+        );
         setError(message);
       }
     } finally {
@@ -567,7 +611,7 @@ export function PrimeHiggsMotion() {
         <div className="prime-server-status">
           {busy
             ? "Server proxy is generating — Safari stays connected to this site only."
-            : "Server proxy ready — no direct Hugging Face browser connection."}
+            : "Prompt text is not keyword-filtered by this site. Upstream model providers may still enforce their own safety rules."}
         </div>
 
         {error && <div className="prime-error">{error}</div>}
@@ -614,7 +658,28 @@ export function PrimeHiggsMotion() {
                   )}
 
                   {job.status === "error" && job.error && (
-                    <p className="prime-job-error">{job.error}</p>
+                    <div className="prime-job-error-details">
+                      <p className="prime-job-error">{job.error}</p>
+                      {job.explanation && (
+                        <div className="prime-error-explanation">
+                          <b>WHY THIS FAILED</b>
+                          <span>{job.explanation}</span>
+                        </div>
+                      )}
+                      {job.failures && job.failures.length > 0 && (
+                        <div className="prime-engine-failures">
+                          {job.failures.map((failure, index) => (
+                            <div key={failure.engine + index} className="prime-engine-failure">
+                              <div>
+                                <b>{failure.engine}</b>
+                                <span>{failure.category.replaceAll("_", " ")}</span>
+                              </div>
+                              <p>{failure.message}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </article>
               ))}

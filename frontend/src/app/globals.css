@@ -900,3 +900,29 @@ body{overflow-x:hidden}
 }
 .prime-audio-volume{margin-top:16px}
 .prime-audio-volume .prime-setting-title-row label{margin:0}
+
+.prime-job-error-details{margin-top:12px;display:grid;gap:10px}
+.prime-error-explanation{
+  padding:11px 12px;border:1px solid #4a3439;border-radius:10px;background:#1d1316;
+}
+.prime-error-explanation b{
+  display:block;color:#ffb4bf;font-size:9px;letter-spacing:.1em;
+}
+.prime-error-explanation span{
+  display:block;margin-top:6px;color:#d0a7ae;font-size:11px;line-height:1.45;
+}
+.prime-engine-failures{display:grid;gap:8px}
+.prime-engine-failure{
+  padding:10px 11px;border:1px solid #2f3036;border-radius:10px;background:#0d0e11;
+}
+.prime-engine-failure>div{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.prime-engine-failure>div b{font-size:10px}
+.prime-engine-failure>div span{
+  padding:4px 6px;border-radius:999px;background:#202127;color:#8e9099;
+  font-size:8px;font-weight:850;text-transform:uppercase;letter-spacing:.06em;
+}
+.prime-engine-failure p{
+  margin:7px 0 0;color:#9a9ca5;font-size:10px;line-height:1.45;word-break:break-word;
+}

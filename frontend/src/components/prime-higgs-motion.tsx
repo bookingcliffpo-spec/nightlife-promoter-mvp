@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 import { ChangeEvent, useMemo, useRef, useState } from "react";
 
-type Ratio = "16:9" | "9:16" | "1:1" | "4:3" | "3:2" | "21:9";
-type Resolution = "480p" | "720p";
+type Ratio = "1:1" | "3:4" | "9:16";
+type OutputQuality = "1080p" | "4K" | "8K";
 type StudioTab = "settings" | "media" | "upload";
 type JobStatus = "queued" | "generating" | "done" | "error" | "cancelled";
 
@@ -37,9 +37,15 @@ type StudioJob = {
 const VIDEO_PROXY_URL =
   "https://ntmunryoutmjqdxgmzpw.supabase.co/functions/v1/video-generate-proxy";
 
-const ratios: Ratio[] = ["16:9", "9:16", "1:1", "4:3", "3:2", "21:9"];
+const ratios: Ratio[] = ["1:1", "3:4", "9:16"];
 
-async function imageToDataUrl(file: File): Promise<string> {
+const outputDimensions: Record<OutputQuality, Record<Ratio, string>> = {
+  "1080p": { "1:1": "1080×1080", "3:4": "1080×1440", "9:16": "1080×1920" },
+  "4K": { "1:1": "2160×2160", "3:4": "2160×2880", "9:16": "2160×3840" },
+  "8K": { "1:1": "4320×4320", "3:4": "4320×5760", "9:16": "4320×7680" },
+};
+
+async function imageToDataUrl(file: File, ratio: Ratio): Promise<string> {
   const objectUrl = URL.createObjectURL(file);
 
   try {
@@ -51,17 +57,33 @@ async function imageToDataUrl(file: File): Promise<string> {
       element.src = objectUrl;
     });
 
-    const maxSide = 1400;
-    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const targetRatio = ratio === "1:1" ? 1 : ratio === "3:4" ? 3 / 4 : 9 / 16;
+    const sourceRatio = image.naturalWidth / image.naturalHeight;
+
+    let sx = 0;
+    let sy = 0;
+    let sw = image.naturalWidth;
+    let sh = image.naturalHeight;
+
+    if (sourceRatio > targetRatio) {
+      sw = image.naturalHeight * targetRatio;
+      sx = (image.naturalWidth - sw) / 2;
+    } else if (sourceRatio < targetRatio) {
+      sh = image.naturalWidth / targetRatio;
+      sy = (image.naturalHeight - sh) / 2;
+    }
+
+    const maxSide = 1600;
+    const scale = Math.min(1, maxSide / Math.max(sw, sh));
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    canvas.width = Math.max(2, Math.round(sw * scale / 2) * 2);
+    canvas.height = Math.max(2, Math.round(sh * scale / 2) * 2);
 
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Could not prepare the image.");
 
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.9);
+    context.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.96);
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -73,8 +95,8 @@ export function PrimeHiggsMotion() {
 
   const [studioTab, setStudioTab] = useState<StudioTab>("settings");
   const [prompt, setPrompt] = useState("");
-  const [ratio, setRatio] = useState<Ratio>("16:9");
-  const [resolution, setResolution] = useState<Resolution>("480p");
+  const [ratio, setRatio] = useState<Ratio>("3:4");
+  const [quality, setQuality] = useState<OutputQuality>("1080p");
   const [duration, setDuration] = useState(4);
   const [audio, setAudio] = useState(true);
   const [outputFormat, setOutputFormat] = useState<"MP4" | "MOV">("MP4");
@@ -155,7 +177,7 @@ export function PrimeHiggsMotion() {
 
     try {
       updateJob(jobId, { status: "generating", progress: 8 });
-      const imageDataUrl = await imageToDataUrl(file);
+      const imageDataUrl = await imageToDataUrl(file, ratio);
 
       let fakeProgress = 12;
       progressTimer = setInterval(() => {
@@ -168,11 +190,14 @@ export function PrimeHiggsMotion() {
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          prompt: prompt.trim() + (audio ? "\nAudio: include matching cinematic ambience when the selected engine supports audio." : ""),
+          prompt:
+            "STRICT SOURCE / ANATOMY LOCK: Use the uploaded image as the exact first frame. Preserve the exact person count and the exact visible body silhouette. Keep the same number of arms, hands, fingers, legs, and visible limbs as the source. Do not invent, reveal, duplicate, merge, or regenerate hidden limbs. Keep face, skin tone, facial structure, hair, clothing, jewelry, hands, pose, and body proportions unchanged. Keep the original person mostly still unless the user explicitly requests a small specific movement. Do not create a second copy of any body part. Preserve all flyer text and logos exactly.\n\nUSER MOTION PROMPT:\n" +
+            prompt.trim() +
+            (audio ? "\n\nAudio: include matching cinematic ambience when the selected engine supports audio." : ""),
           image_data_url: imageDataUrl,
           mime_type: "image/jpeg",
           aspect_ratio: ratio,
-          resolution,
+          resolution: "720p",
           duration_seconds: Math.min(5, duration),
           output_format: outputFormat.toLowerCase(),
         }),
@@ -187,11 +212,32 @@ export function PrimeHiggsMotion() {
         );
       }
 
+      updateJob(jobId, { status: "generating", progress: 94 });
+
+      const upscaleResponse = await fetch("/api/upscale-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          source_url: String(data.output_url),
+          aspect_ratio: ratio,
+          quality,
+        }),
+      });
+
+      const upscaleData = await upscaleResponse.json().catch(() => ({}));
+      if (!upscaleResponse.ok || !upscaleData?.output_url) {
+        throw new Error(
+          upscaleData?.error ||
+            "The video generated, but the high-resolution export failed.",
+        );
+      }
+
       updateJob(jobId, {
         status: "done",
         progress: 100,
-        outputUrl: String(data.output_url),
-        engine: String(data.engine || "Free AI"),
+        outputUrl: String(upscaleData.output_url),
+        engine: String(data.engine || "Free AI") + " • " + quality + " export",
       });
     } catch (err) {
       if (controller.signal.aborted) {
@@ -285,17 +331,20 @@ export function PrimeHiggsMotion() {
               </div>
 
               <div className="prime-setting-block">
-                <label>RESOLUTION</label>
+                <label>OUTPUT QUALITY</label>
                 <div className="prime-chip-row">
-                  {(["480p", "720p"] as Resolution[]).map((item) => (
+                  {(["1080p", "4K", "8K"] as OutputQuality[]).map((item) => (
                     <button
                       key={item}
-                      className={resolution === item ? "active" : ""}
-                      onClick={() => setResolution(item)}
+                      className={quality === item ? "active" : ""}
+                      onClick={() => setQuality(item)}
                     >
                       {item}
                     </button>
                   ))}
+                </div>
+                <div className="prime-output-dimensions">
+                  {outputDimensions[quality][ratio]} • exact {ratio} export
                 </div>
               </div>
 

@@ -8,6 +8,11 @@ const nextConfig = {
         pathname: '/storage/v1/object/public/**'
       }
     ]
+  },
+  outputFileTracingIncludes: {
+    '/api/upscale-video': [
+      './node_modules/ffmpeg-static/ffmpeg'
+    ]
   }
 };
 
